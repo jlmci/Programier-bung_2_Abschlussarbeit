@@ -5,5 +5,5 @@ import time
 #st.title("Trainingstagebuch")
 
 
-pg = st.navigation(["pages/home.py","pages/add workout.py", "pages/Test 1.py"], position = "sidebar", expanded=True)
+pg = st.navigation(["pages/Profil.py", "pages/dashboard.py", "pages/add workout.py", "pages/Test 1.py"], position = "sidebar", expanded=True)
 pg.run()
