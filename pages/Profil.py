@@ -1,12 +1,16 @@
 import streamlit as st
+from Person.Personenklasse import Person
 
+st.title("Profil")
 
-st.title("Dashboard")
-st.write("This is the home page of the training diary app.")
-
+# hier später person die eingeloggt /ausgewählt ist laden
+Nuter = Person.get_by_id(1)  # Beispiel: ID 1 für den eingeloggten Nutzer
+print(Nuter.get_full_name())  # Ausgabe des vollständigen Namens
 
 
 '''Personendaten aus datenbank laden'''
+
+
 '''
 bild, personendaten = st.columns([1,2], gap="small")
 with bild:
