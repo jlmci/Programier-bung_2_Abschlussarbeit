@@ -25,7 +25,7 @@ db = TinyDB('dbperson.json') # Changed df to db for consistency with TinyDB exam
 # --- Session State for the current user's ID ---
 # This is crucial for maintaining the selected user across Streamlit reruns
 if 'current_user_id' not in st.session_state:
-    st.session_state.current_user_id = "3" # Default to user ID "3"
+    st.session_state.current_user_id = "2" # Default to user ID "3"
 
 # --- User Selection (Optional: if you want to switch between users) ---
 # You can get all doc_ids from your DB to populate a selectbox
@@ -119,7 +119,23 @@ with personendaten_col:
     new_gender = st.selectbox("Geschlecht:", ["male", "female", "other"], index=["male", "female", "other"].index(Nutzer.gender))
     
     # Display calculated age
-    st.write("Alter (geschätzt): ", Nutzer.age)
+    current_maximalpuls = Nutzer.max_hr()  # Assuming max_hr() returns the maximum heart rate based on age
+    min_puls = 100
+    max_puls = 220
+
+    st.write("Alter: ", Nutzer.age)
+    #st.write("Maximale Herzfrequenz: ", Nutzer.max_hr())
+    slider_value = max(min_puls, min(max_puls, current_maximalpuls))
+
+    new_maximalpuls = st.slider(
+        "Maximalpuls:",
+        min_value=min_puls,
+        max_value=max_puls,
+        value=slider_value,
+        step=1
+    )
+    st.write(f"Anzahl Trainings: {len(Nutzer.ekg_test_ids)}")
+
 
     # EKG Tests (display as comma-separated string, allow editing)
     # Convert list of ints to string for editing, then back to list of ints
@@ -143,6 +159,7 @@ with personendaten_col:
                     "date_of_birth": new_date_of_birth,
                     "gender": new_gender,
                     "picture_path": Nutzer.picture_path, # Use the updated path from file_uploader
+                    "maximalpuls": new_maximalpuls,
                     #"ekg_tests": new_ekg_tests_list
                 },
                 doc_ids=[int(st.session_state.current_user_id)] # Update the specific document

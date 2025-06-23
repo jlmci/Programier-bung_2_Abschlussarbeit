@@ -113,6 +113,10 @@ class Person:
             print(f"EKG-Test-ID {test_id} von {self.get_full_name()} entfernt.")
         else:
             print(f"EKG-Test-ID {test_id} nicht gefunden für {self.get_full_name()}.")
+    
+    def max_hr(self):
+        maxhr = 220 - self.age
+        return maxhr
 
 
 # --- Beispielhafte Verwendung ---
