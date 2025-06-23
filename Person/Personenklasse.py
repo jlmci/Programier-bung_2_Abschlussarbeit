@@ -22,6 +22,12 @@ class Person:
         self.gender = gender
         self.ekg_test_ids = ekg_test_ids
 
+        from datetime import datetime
+        heute = datetime.now() # Holt das aktuelle Datum und die aktuelle Uhrzeit
+
+        alter = heute.year - self.date_of_birth
+        self.age = alter
+
     def __repr__(self):
         return (f"Person(ID={self.doc_id}, Name='{self.firstname} {self.lastname}', "
                 f"DOB={self.date_of_birth}, Gender='{self.gender}', "
@@ -107,15 +113,6 @@ class Person:
             print(f"EKG-Test-ID {test_id} von {self.get_full_name()} entfernt.")
         else:
             print(f"EKG-Test-ID {test_id} nicht gefunden für {self.get_full_name()}.")
-
-    def nuter_age(self):
-        # funktion, die auf basis des Geburtzdatums das alter berechnet.
-
-        from datetime import datetime
-        heute = datetime.now() # Holt das aktuelle Datum und die aktuelle Uhrzeit
-
-        alter = heute.year - self.date_of_birth
-        self.age = alter
 
 
 # --- Beispielhafte Verwendung ---
