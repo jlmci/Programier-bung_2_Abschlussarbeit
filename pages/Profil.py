@@ -1,38 +1,45 @@
 import streamlit as st
+import os
+import sys
+import inspect
+from tinydb import TinyDB, Query
+
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+sys.path.insert(0, parentdir) 
+
 from Person.Personenklasse import Person
-
-st.title("Profil")
-
-# hier später person die eingeloggt /ausgewählt ist laden
-Nuter = Person.get_by_id(1)  # Beispiel: ID 1 für den eingeloggten Nutzer
-print(Nuter.get_full_name())  # Ausgabe des vollständigen Namens
+df = TinyDB('dbperson.json')
 
 
-'''Personendaten aus datenbank laden'''
+#code für sessionstate id
+id = "3"
+
+data = df.get(doc_ids=id)
+print(data)
+firstname_value = data[0]["firstname"]
+lastname_value = data[0]["lastname"]
+date_of_birth_value = data[0]["date_of_birth"]
+picture_path_value = data[0]["picture_path"]
+gender_value = data[0]["gender"]
+ekg_tests_value = data[0]["ekg_tests"]
+
+Nutzer = Person(id, date_of_birth_value, firstname_value, lastname_value, picture_path_value, gender_value,ekg_tests_value) 
 
 
-'''
 bild, personendaten = st.columns([1,2], gap="small")
 with bild:
     st.markdown("<div style='padding-top: 23px; font-size: 32px;'>Personendaten</div>", unsafe_allow_html=True)
-    st.image(image)
+    st.image(Nutzer.picture_path)  # Verwende das Bild aus der Person-Instanz
 with personendaten:
     st.markdown("<br><br>", unsafe_allow_html=True) # Leerer Platzhalter, um den Abstand zu vergrößern
-    st.write("ID:", person.Person.find_person_data_by_name(st.session_state.current_user)["id"])
-    st.write("Vorname: ", person.Person.find_person_data_by_name(st.session_state.current_user)["firstname"])
-    st.write("Nachname: ", person.Person.find_person_data_by_name(st.session_state.current_user)["lastname"])
+    st.write("ID:", Nutzer.doc_id)
+    st.write("Vorname: ", Nutzer.firstname)
+    st.write("Nachname: ", Nutzer.lastname)
     #st.markdown(f"<span style='color:white; font-size:16px;'>id: {id_value}</span>", unsafe_allow_html=True)
     #st.markdown(f"<span style='color:white; font-size:16px;'>id: {birthdate_value}</span>", unsafe_allow_html=True)
-    st.write("Geschlecht: ", person.Person.find_person_data_by_name(st.session_state.current_user)["gender"])
-    st.write("Geburtsdatum: ", person.Person.find_person_data_by_name(st.session_state.current_user)["date_of_birth"])
-    st.write("Alter: ", person.Person.calc_age(st.session_state.current_user))
-
-
-#Leistunskurve über mehere Workouts anzeigen
-path2 = "data/activities/activity.csv"
-df2 = create_power_curve.read_csv(path2)
-power_curve_df = create_power_curve.create_power_curve(df2)
-fig2 = create_power_curve.plot_power_curve(power_curve_df)
-st.plotly_chart(fig2)  # Zeige den Plot in der Streamlit-App an
-'''
+    st.write("Geschlecht: ", Nutzer.gender)
+    st.write("Geburtsdatum: ", Nutzer.date_of_birth)
+    Nutzer.nuter_age()
+    st.write("Alter: ", Nutzer.age)
 

@@ -9,4 +9,5 @@ sys.path.insert(0, parentdir)
 from Person.Personenklasse import Person
 
 Nuter = Person.get_by_id(1) 
+print(Nuter)
 

@@ -108,6 +108,15 @@ class Person:
         else:
             print(f"EKG-Test-ID {test_id} nicht gefunden für {self.get_full_name()}.")
 
+    def nuter_age(self):
+        # funktion, die auf basis des Geburtzdatums das alter berechnet.
+
+        from datetime import datetime
+        heute = datetime.now() # Holt das aktuelle Datum und die aktuelle Uhrzeit
+
+        alter = heute.year - self.date_of_birth
+        self.age = alter
+
 
 # --- Beispielhafte Verwendung ---
 if __name__ == "__main__":
