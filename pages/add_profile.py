@@ -194,8 +194,8 @@ with st.form("add_profile_form"):
                 # 4. Daten in config.yaml schreiben
                 if write_to_config_yaml(new_username, new_user_details):
                     st.success(f"Neues Profil für **{new_firstname} {new_lastname}** erfolgreich erstellt! ")
-                    st.info(f"Zugeordnete Personen-ID (TinyDB): **{new_doc_id}**")
-                    st.info(f"Neuer Login-Benutzername: **{new_username}**")
+                    #st.info(f"Zugeordnete Personen-ID (TinyDB): **{new_doc_id}**")
+                    #st.info(f"Neuer Login-Benutzername: **{new_username}**")
                     st.warning("Hinweis: Nach der Erstellung muss die App neu gestartet werden, damit der neue Benutzer in der Login-Maske sichtbar wird.")
                     
                     # Optional: Formularfelder zurücksetzen, indem die App neu gerendert wird
