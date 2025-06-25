@@ -16,7 +16,11 @@ credentials:
       name: Janick Hoffmann
       password: '1234'
       person_doc_id: 4
+    admin1:
+      name: Jakob Laurner
+      password: '1234'
+      person_doc_id: 5
 permissions:
   can_add_profile_doc_ids:
   - 4
-  
+  - 5
