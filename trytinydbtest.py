@@ -3,8 +3,8 @@ from tinydb import TinyDB, Query
 db = TinyDB('dbtests.json')
 df = TinyDB('dbperson.json')
 
-data = db.search(Query().id == 1)
-#print(data)
+data = db.get(doc_ids = "1")
+print(data)
 
 #genaue Ausgabe
 datagenau = data[0]["date"]
