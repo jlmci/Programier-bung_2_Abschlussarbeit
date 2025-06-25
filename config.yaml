@@ -4,3 +4,4 @@ credentials:
     mmustermann:
       name: Max Mustermann
       password: $2a$12$W4qRiYWTTqBGOxOqDoeG/.tqLrir3B9L74jNqXyDF.Ge14ENsn.VW
+      id: 1

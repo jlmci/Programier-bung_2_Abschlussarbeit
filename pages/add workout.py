@@ -1,5 +1,6 @@
 import streamlit as st
 from datetime import datetime
+import addtrainingtodict
 
 
 st.title("Workout hinzufügen")
@@ -54,6 +55,23 @@ if st.button("Workout hinzufügen"):
                 f.write(ekg_file)
         else:
             st.warning("Keine EKG-Datei hochgeladen.")
+        
+        addtrainingtodict.add_training_to_dict(
+            name=name,
+            date=date,
+            sportart=sportart,
+            dauer=dauer,
+            distanz=distanz,
+            puls=puls,
+            kalorien=kalorien,
+            antrengung=antrengung,
+            star_rating=star_rating,
+            description=description,
+            image=image,
+            gpx_file=link_gpx,
+            ekg_file=link_txt
+        )
+
 
 
 

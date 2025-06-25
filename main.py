@@ -4,7 +4,7 @@ import yaml
 from yaml.loader import SafeLoader
 
 # --- Initial Page Setup (before any other Streamlit commands) ---
-st.set_page_config(page_title="Trainingstagebuch", page_icon="💪", layout="wide")
+st.set_page_config(page_title="Trainingstagebuch", page_icon="💪", layout= "wide")
 
 
 # Initialize the session state for login status and user details.
@@ -77,6 +77,7 @@ else: # Benutzer ist eingeloggt
         st.session_state["name"] = None
         st.info("Sie wurden abgemeldet.")
         st.rerun()
+        
 
     # --- Navigation für eingeloggte Benutzer ---
     pg = st.navigation([
@@ -85,5 +86,4 @@ else: # Benutzer ist eingeloggt
         st.Page("pages/add workout.py", title="Workout hinzufügen", icon="🏋️"),
         st.Page("pages/Test 1.py", title="Testseite", icon="🧪")
     ], position="sidebar", expanded=True)
-
     pg.run()
