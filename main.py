@@ -191,8 +191,8 @@ else: # Benutzer ist eingeloggt
 
     # --- Navigation für eingeloggte Benutzer ---
     sidebar_pages = [
-        st.Page("pages/Profil.py", title="Profil", icon="👤"),
         st.Page("pages/dashboard.py", title="Dashboard", icon="📊"),
+        st.Page("pages/Profil.py", title="Profil", icon="👤"),
         st.Page("pages/add workout.py", title="Workout hinzufügen", icon="🏋️"),
         st.Page("pages/Trainingsliste.py", title="Testseite", icon="🧪")
     ]

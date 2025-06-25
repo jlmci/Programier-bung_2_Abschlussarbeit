@@ -27,10 +27,14 @@ db = TinyDB('dbperson.json') # Changed df to db for consistency with TinyDB exam
 
 
 ###ggf wichtig für anderes
-if 'current_user_id' not in st.session_state:
-    st.session_state.current_user_id = "2" # Default to user ID "3"
-else:
-    st.session_state.current_user_id = str(st.session_state["person_doc_id"]) # Ensure it's a string
+
+st.session_state.current_user_id = str(st.session_state["person_doc_id"])
+
+
+#if 'current_user_id' not in st.session_state:
+#    st.session_state.current_user_id = "2" # Default to user ID "3"
+#else:
+#    st.session_state.current_user_id = str(st.session_state["person_doc_id"]) # Ensure it's a string
 
     ###ggf wichtig für anderes
 
