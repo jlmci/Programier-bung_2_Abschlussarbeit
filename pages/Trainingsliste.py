@@ -6,20 +6,17 @@ import gpxpy
 import gpxpy.gpx
 from streamlit_folium import folium_static
 import os
+import plotly.express as px
+import plotly.graph_objects as go # Import plotly.graph_objects for more control
 
 # --- Konfiguration und Initialisierung ---
-# Verzeichnis für lokale Bilder. Streamlit muss darauf zugreifen können.
-# Es wird empfohlen, diesen Ordner relativ zum Skript zu halten.
 IMAGE_DIR = "images"
-DATA_DIR = "data" # Verzeichnis für GPX- und EKG-Dateien
+DATA_DIR = "data"
 
 def initialize_directories():
     """Stellt sicher, dass notwendige Verzeichnisse existieren."""
     os.makedirs(IMAGE_DIR, exist_ok=True)
     os.makedirs(DATA_DIR, exist_ok=True)
-    # Optional: Initialisierungsmeldungen, falls Ordner neu erstellt wurden
-    # if not os.path.exists(IMAGE_DIR): st.info(f"Ordner '{IMAGE_DIR}' erstellt.")
-    # if not os.path.exists(DATA_DIR): st.info(f"Ordner '{DATA_DIR}' erstellt.")
 
 def get_initial_training_data():
     """
@@ -73,7 +70,7 @@ def get_initial_training_data():
             "star_rating": 4,
             "description": "Entspannte Radtour entlang des Sees. Wenig Wind, gute Sicht.",
             "image": os.path.join(IMAGE_DIR, "radfahren.jpg"),
-            "gpx_file": os.path.join("../data/", "UM_28_5__Elgen.gpx"), # Beispiel GPX-Datei
+            "gpx_file": os.path.join("../data/", "UM_28_5__Elgen.gpx"),
             "ekg_file": ""
         }
     ]
@@ -96,7 +93,8 @@ def load_gpx_data(gpx_filepath):
         return None
     try:
         with open(abs_filepath, 'r') as gpx_file:
-            return gpxpy.parse(gpx_file)
+            gpx = gpxpy.parse(gpx_file)
+            return gpx
     except FileNotFoundError:
         st.error(f"Fehler: GPX-Datei '{gpx_filepath}' wurde nicht gefunden.")
         return None
@@ -136,14 +134,19 @@ def display_gpx_on_map_ui(gpx_object):
         st.markdown("Keine GPX-Daten zum Anzeigen vorhanden.")
         return
 
-    # Finde den Mittelpunkt des ersten Tracks, um die Karte zu zentrieren
+    # Check if there are any points before accessing
+    if not gpx_object.tracks[0].segments[0].points:
+        st.warning("GPX-Track hat keine Punkte für die Karte.")
+        return
+
     first_point = gpx_object.tracks[0].segments[0].points[0]
     m = folium.Map(location=[first_point.latitude, first_point.longitude], zoom_start=13)
 
     for track in gpx_object.tracks:
         for segment in track.segments:
             points = [(point.latitude, point.longitude) for point in segment.points]
-            folium.PolyLine(points, color="red", weight=2.5, opacity=1).add_to(m)
+            if points: # Ensure there are points to draw
+                folium.PolyLine(points, color="red", weight=2.5, opacity=1).add_to(m)
 
     # Passe den Zoom der Karte an
     bounds = gpx_object.get_bounds()
@@ -152,12 +155,93 @@ def display_gpx_on_map_ui(gpx_object):
 
     folium_static(m)
 
-def display_training_details_ui(training_data, on_delete_callback):
+def display_elevation_profile_ui(gpx_object):
+    """
+    Zeigt ein Höhenprofil basierend auf GPX-Daten an.
+    Erwartet ein geparstes gpxpy.GPX-Objekt.
+    """
+    if not gpx_object or not gpx_object.tracks:
+        st.markdown("Keine GPX-Daten für das Höhenprofil vorhanden.")
+        return
+
+    elevations = []
+    distances = []
+    total_distance_km = 0.0
+
+    # Iterate through all tracks and segments to get elevation and cumulative distance
+    for track in gpx_object.tracks:
+        for segment in track.segments:
+            for i, point in enumerate(segment.points):
+                if point.elevation is not None:
+                    elevations.append(point.elevation)
+                    if i > 0:
+                        dist_inc_m = point.distance_2d(segment.points[i-1])
+                        total_distance_km += dist_inc_m / 1000.0
+                    distances.append(total_distance_km)
+
+    if not elevations:
+        st.warning("Keine Höheninformationen in der GPX-Datei gefunden.")
+        return
+
+    # Create a DataFrame for Plotly
+    df_elevation = pd.DataFrame({
+        'Distanz (km)': distances,
+        'Höhe (m)': elevations
+    })
+
+    # Create the Plotly figure using graph_objects for more customization
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=df_elevation['Distanz (km)'],
+        y=df_elevation['Höhe (m)'],
+        mode='lines',
+        name='Höhenprofil',
+        line=dict(width=3, color='rgb(63, 103, 126)'), # Darker blue/grey line
+        fill='tozeroy', # Fill area below the line
+        fillcolor='rgba(120, 171, 203, 0.4)' # Lighter blue with transparency
+    ))
+
+    fig.update_layout(
+        title_text='Höhenprofil',
+        title_x=0.5, # Center title
+        xaxis_title='Distanz (km)',
+        yaxis_title='Höhe (m)',
+        hovermode="x unified",
+        plot_bgcolor='rgba(0,0,0,0)', # Transparent plot background
+        paper_bgcolor='rgba(0,0,0,0)', # Transparent paper background
+        font=dict(color='black'), # Default font color
+        margin=dict(l=40, r=40, t=40, b=40) # Adjust margins
+    )
+
+    fig.update_xaxes(
+        showgrid=True,
+        gridwidth=1,
+        gridcolor='LightGrey',
+        zeroline=True,
+        zerolinewidth=2,
+        zerolinecolor='LightGrey'
+    )
+    fig.update_yaxes(
+        showgrid=True,
+        gridwidth=1,
+        gridcolor='LightGrey',
+        zeroline=True,
+        zerolinewidth=2,
+        zerolinecolor='LightGrey'
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def display_training_details_ui(training_data, on_delete_callback, on_edit_callback):
     """
     Zeigt die Details eines einzelnen Trainings in einem Expander an.
     training_data: Ein Dictionary mit den Trainingsdetails.
     on_delete_callback: Eine Funktion, die aufgerufen wird, wenn das Löschen geklickt wird.
-                        Sie sollte die ID des zu löschenden Trainings erhalten.
+                        Sie sollte die ID des zu löschen Trainings erhalten.
+    on_edit_callback: Eine Funktion, die aufgerufen wird, wenn das Bearbeiten geklickt wird.
+                      Sie sollte die ID des zu bearbeitenden Trainings erhalten.
     """
     expander_title = f"**{training_data['name']}** - {training_data['date']} ({training_data['sportart']})"
     with st.expander(expander_title):
@@ -193,7 +277,10 @@ def display_training_details_ui(training_data, on_delete_callback):
         # GPX-Karte anzeigen
         if training_data['gpx_file'] and training_data['gpx_file'] != "-":
             gpx_data = load_gpx_data(training_data['gpx_file'])
-            display_gpx_on_map_ui(gpx_data)
+            if gpx_data: # Only display if data was loaded successfully
+                display_gpx_on_map_ui(gpx_data)
+                st.markdown("---") # Separator between map and elevation profile
+                display_elevation_profile_ui(gpx_data)
         else:
             st.markdown("Keine GPX-Datei verlinkt.")
 
@@ -210,6 +297,10 @@ def display_training_details_ui(training_data, on_delete_callback):
         st.markdown("---")
 
         col_edit, col_delete, col_spacer = st.columns([0.15, 0.15, 0.7])
+        with col_edit:
+            if st.button("Bearbeiten 📝", key=f"edit_btn_{training_data['id']}"):
+                on_edit_callback(training_data['id'])
+                st.rerun() # Rerun to show the edit form
         with col_delete:
             if st.button("Löschen 🗑️", key=f"delete_btn_{training_data['id']}"):
                 on_delete_callback(training_data['id'])
@@ -234,12 +325,74 @@ def display_training_list_ui(trainings):
     )
 
     for training in sorted_trainings:
-        display_training_details_ui(training, delete_training_from_session_state)
+        display_training_details_ui(training, delete_training_from_session_state, set_training_to_edit)
 
 def delete_training_from_session_state(training_id):
     """Callback-Funktion zum Löschen eines Trainings aus dem Session State."""
     st.session_state.trainings = [t for t in st.session_state.trainings if t['id'] != training_id]
 
+def set_training_to_edit(training_id):
+    """Setzt die ID des Trainings, das bearbeitet werden soll, im Session State."""
+    st.session_state.editing_training_id = training_id
+
+def update_training_in_session_state(updated_training):
+    """Aktualisiert ein Training im Session State."""
+    for i, training in enumerate(st.session_state.trainings):
+        if training['id'] == updated_training['id']:
+            st.session_state.trainings[i] = updated_training
+            break
+    st.session_state.editing_training_id = None # Reset editing state
+    st.success("Training erfolgreich aktualisiert!")
+    st.rerun()
+
+
+def edit_training_ui(training_data):
+    """
+    Zeigt ein Formular zum Bearbeiten eines Trainings an.
+    training_data: Ein Dictionary mit den aktuellen Trainingsdetails.
+    """
+    st.subheader(f"Training bearbeiten: {training_data['name']}")
+    with st.form(key=f"edit_training_form_{training_data['id']}"):
+        edited_name = st.text_input("Name", value=training_data['name'])
+        edited_date = st.date_input("Datum", value=datetime.strptime(training_data['date'], "%Y-%m-%d"))
+        edited_sportart = st.text_input("Sportart", value=training_data['sportart'])
+        edited_dauer = st.text_input("Dauer", value=training_data['dauer'])
+        edited_distanz = st.text_input("Distanz", value=training_data['distanz'])
+        edited_puls = st.text_input("Puls", value=training_data['puls'])
+        edited_kalorien = st.text_input("Kalorien", value=training_data['kalorien'])
+        edited_description = st.text_area("Beschreibung", value=training_data['description'])
+        
+        # Keep effort and rating read-only
+        st.markdown(f"**Anstrengung (nicht editierbar):** {training_data['anstrengung']}/10")
+        st.markdown(f"**Bewertung (nicht editierbar):** {'⭐' * training_data['star_rating']}")
+
+        # File paths can be edited as text inputs, or you could add file uploaders
+        edited_image = st.text_input(f"Bilddatei (im Ordner '{IMAGE_DIR}')", value=training_data['image'])
+        edited_gpx_file = st.text_input(f"GPX-Datei (im Ordner '{DATA_DIR}')", value=training_data['gpx_file'])
+        edited_ekg_file = st.text_input(f"EKG-Datei (im Ordner '{DATA_DIR}')", value=training_data['ekg_file'])
+
+        submit_button = st.form_submit_button("Änderungen speichern")
+        cancel_button = st.form_submit_button("Abbrechen")
+
+        if submit_button:
+            updated_training = training_data.copy()
+            updated_training.update({
+                "name": edited_name,
+                "date": edited_date.strftime("%Y-%m-%d"),
+                "sportart": edited_sportart,
+                "dauer": edited_dauer,
+                "distanz": edited_distanz,
+                "puls": edited_puls,
+                "kalorien": edited_kalorien,
+                "description": edited_description,
+                "image": edited_image,
+                "gpx_file": edited_gpx_file,
+                "ekg_file": edited_ekg_file,
+            })
+            update_training_in_session_state(updated_training)
+        elif cancel_button:
+            st.session_state.editing_training_id = None # Exit edit mode
+            st.rerun()
 
 # --- Hauptanwendung ---
 def main():
@@ -250,12 +403,24 @@ def main():
     initialize_directories()
 
     # Initialisiere Trainingsdaten im Session State, falls nicht vorhanden
-    # In einem echten Szenario würde dies von der Datenbank geladen
     if 'trainings' not in st.session_state:
         st.session_state.trainings = get_initial_training_data()
+    
+    # Initialize editing state
+    if 'editing_training_id' not in st.session_state:
+        st.session_state.editing_training_id = None
 
-    # UI zum Anzeigen der Trainingsliste
-    display_training_list_ui(st.session_state.trainings)
+    # Check if a training is being edited
+    if st.session_state.editing_training_id is not None:
+        training_to_edit = next((t for t in st.session_state.trainings if t['id'] == st.session_state.editing_training_id), None)
+        if training_to_edit:
+            edit_training_ui(training_to_edit)
+        else:
+            st.error("Training zum Bearbeiten nicht gefunden.")
+            st.session_state.editing_training_id = None # Reset if not found
+    else:
+        # UI zum Anzeigen der Trainingsliste
+        display_training_list_ui(st.session_state.trainings)
 
 if __name__ == "__main__":
     main()
