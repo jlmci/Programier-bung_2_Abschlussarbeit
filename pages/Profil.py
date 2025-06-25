@@ -24,8 +24,15 @@ db = TinyDB('dbperson.json') # Changed df to db for consistency with TinyDB exam
 
 # --- Session State for the current user's ID ---
 # This is crucial for maintaining the selected user across Streamlit reruns
+
+
+###ggf wichtig für anderes
 if 'current_user_id' not in st.session_state:
     st.session_state.current_user_id = "2" # Default to user ID "3"
+else:
+    st.session_state.current_user_id = str(st.session_state["person_doc_id"]) # Ensure it's a string
+
+    ###ggf wichtig für anderes
 
 # --- User Selection (Optional: if you want to switch between users) ---
 # You can get all doc_ids from your DB to populate a selectbox

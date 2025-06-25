@@ -1,7 +1,22 @@
-# config.yaml
 credentials:
   usernames:
     mmustermann:
       name: Max Mustermann
-      password: $2a$12$W4qRiYWTTqBGOxOqDoeG/.tqLrir3B9L74jNqXyDF.Ge14ENsn.VW
-      id: 1
+      password: passwort123
+      person_doc_id: 3
+    yheyer:
+      name: Yannic Heyer
+      password: 12345678
+      person_doc_id: 1
+    jhuber:
+      name: Julian Huber
+      password: abcdef
+      person_doc_id: 2
+    admin2:
+      name: Janick Hoffmann
+      password: '1234'
+      person_doc_id: 4
+permissions:
+  can_add_profile_doc_ids:
+  - 4
+  
