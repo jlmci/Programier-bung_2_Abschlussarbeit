@@ -16,6 +16,7 @@ dependencies = [
     "gpxpy>=1.6.2",
     "folium>=0.20.0",
     "streamlit-folium>=0.25.0",
+    "fitparse>=1.2.0",
 ]
 requires-python = "==3.10.*"
 readme = "README.md"

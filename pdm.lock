@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:652aae07ba464979e64eda47270e2629bd1c3ba8714d5e026a19c8d87d508ec3"
+content_hash = "sha256:cd5df7520e5fd9f7fe48a37efffb71e8cc014bfde7c8eadd273f41c87ed4fe71"
 
 [[metadata.targets]]
 requires_python = "==3.10.*"
@@ -261,6 +261,15 @@ dependencies = [
 files = [
     {file = "extra_streamlit_components-0.1.80-py3-none-any.whl", hash = "sha256:7a8c151da5dcd1f1f97b6c29caa812a1d77928d20fc4bf42a3a4fd788274dd9e"},
     {file = "extra_streamlit_components-0.1.80.tar.gz", hash = "sha256:87d6c38e07381501d8882796adef17d1c1d4e3a79615864d95c1163d2bc136f6"},
+]
+
+[[package]]
+name = "fitparse"
+version = "1.2.0"
+summary = "Python library to parse ANT/Garmin .FIT files"
+groups = ["default"]
+files = [
+    {file = "fitparse-1.2.0.tar.gz", hash = "sha256:2d691022452dea6dabad13cc6e017ca467fe8a3a895cd3ac67a50a7bb716b4a9"},
 ]
 
 [[package]]
