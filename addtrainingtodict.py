@@ -2,7 +2,7 @@ from tinydb import TinyDB, Query
 
 db = TinyDB('dbtests.json')
 dp = TinyDB('dbperson.json')
-def add_training_to_dict(Personid, date, sportart, dauer, distanz, puls, kalorien, anstrengung, star_rating, description, image=None, gpx_file=None, ekg_file=None):
+def add_training_to_dict(Personid, date, sportart, dauer, distanz, puls, kalorien, anstrengung, star_rating, description, image=None, gpx_file=None, ekg_file=None, fit_file=None):
     """
     Füge ein neues Training zu der Datenbank hinzu.
     
@@ -35,7 +35,8 @@ def add_training_to_dict(Personid, date, sportart, dauer, distanz, puls, kalorie
             "description": description,
             "image": image,
             "gpx_file": gpx_file,
-            "ekg_file": ekg_file
+            "ekg_file": ekg_file,
+            "fit_file": fit_file
         })
             
 

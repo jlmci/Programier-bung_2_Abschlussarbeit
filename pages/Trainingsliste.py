@@ -1,13 +1,18 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import folium
 import gpxpy
 import gpxpy.gpx
 from streamlit_folium import folium_static
 import os
 import plotly.express as px
-import plotly.graph_objects as go # Import plotly.graph_objects for more control
+import plotly.graph_objects as go
+import numpy as np
+import fitparse
+
+# --- Konfiguration der Streamlit-Seite ---
+#st.set_page_config(layout="wide") # Moved to the very top!
 
 # --- Konfiguration und Initialisierung ---
 IMAGE_DIR = "images"
@@ -39,7 +44,8 @@ def get_initial_training_data():
             "description": "Schöner, erfrischender Lauf im Wald. Keine Probleme, angenehme Temperatur.",
             "image": os.path.join(IMAGE_DIR, "laufbild.jpg"),
             "gpx_file": os.path.join(DATA_DIR, "UM_28_5__Elgen.gpx"),
-            "ekg_file": ""
+            "ekg_file": "",
+            "fit_file": ""
         },
         {
             "id": 2,
@@ -55,7 +61,8 @@ def get_initial_training_data():
             "description": "Intensives Beintraining mit Fokus auf Kniebeugen und Kreuzheben. Gute Progression bei den Gewichten.",
             "image": os.path.join(IMAGE_DIR, "krafttraining.jpg"),
             "gpx_file": "-",
-            "ekg_file": "-"
+            "ekg_file": "-",
+            "fit_file": ""
         },
         {
             "id": 3,
@@ -70,8 +77,9 @@ def get_initial_training_data():
             "star_rating": 4,
             "description": "Entspannte Radtour entlang des Sees. Wenig Wind, gute Sicht.",
             "image": os.path.join(IMAGE_DIR, "radfahren.jpg"),
-            "gpx_file": os.path.join("../data/", "UM_28_5__Elgen.gpx"),
-            "ekg_file": ""
+            "gpx_file": os.path.join(DATA_DIR, "UM_28_5__Elgen.gpx"),
+            "ekg_file": "",
+            "fit_file": os.path.join(DATA_DIR, "FTP_Test.fit")
         }
     ]
 
@@ -123,6 +131,77 @@ def load_ekg_data(ekg_filepath):
         st.error(f"Fehler beim Lesen der EKG-Datei '{ekg_filepath}': {e}")
         return None
 
+def load_fit_data(fit_filepath):
+    """
+    Lädt und parst eine FIT-Datei und extrahiert relevante Daten.
+    Gibt ein Pandas DataFrame mit Zeit, Herzfrequenz, Leistung usw. zurück oder None bei Fehler.
+    """
+    abs_filepath = get_absolute_path(fit_filepath)
+    if not abs_filepath:
+        return None
+    try:
+        fitfile = fitparse.FitFile(abs_filepath)
+
+        time = []
+        velocity = []
+        heartrate = []
+        distance = []
+        cadence = []
+        power = []
+
+        garmin_epoch = datetime(1989, 12, 31, 0, 0, 0, tzinfo=None)
+
+        for record in fitfile.get_messages('record'):
+            timestamp = None
+            speed_val = None
+            hr_val = None
+            dist_val = None
+            cadence_val = None
+            power_val = None
+
+            for record_data in record:
+                if record_data.name == "timestamp":
+                    timestamp = record_data.value
+                elif record_data.name == "speed":
+                    speed_val = record_data.value
+                elif record_data.name == "heart_rate":
+                    hr_val = record_data.value
+                elif record_data.name == "distance":
+                    dist_val = record_data.value
+                elif record_data.name == "cadence":
+                    cadence_val = record_data.value
+                elif record_data.name == "power":
+                    power_val = record_data.value
+
+            if timestamp is not None:
+                time.append(timestamp)
+                velocity.append(speed_val)
+                heartrate.append(hr_val)
+                distance.append(dist_val)
+                cadence.append(cadence_val)
+                power.append(power_val)
+
+        df = pd.DataFrame({
+            "time": time,
+            "velocity": velocity,
+            "heart_rate": heartrate,
+            "distance": distance,
+            "cadence": cadence,
+            "power": power
+        })
+        df = df.fillna(method='ffill').fillna(method='bfill')
+        return df
+
+    except FileNotFoundError:
+        st.error(f"Fehler: FIT-Datei '{fit_filepath}' wurde nicht gefunden.")
+        return None
+    except fitparse.FitParseError as e:
+        st.error(f"Fehler beim Parsen der FIT-Datei '{fit_filepath}': {e}.")
+        return None
+    except Exception as e:
+        st.error(f"Ein unerwarteter Fehler ist aufgetreten beim Laden von '{fit_filepath}': {e}")
+        return None
+
 # --- UI-Komponenten als Funktionen ---
 
 def display_gpx_on_map_ui(gpx_object):
@@ -134,7 +213,6 @@ def display_gpx_on_map_ui(gpx_object):
         st.markdown("Keine GPX-Daten zum Anzeigen vorhanden.")
         return
 
-    # Check if there are any points before accessing
     if not gpx_object.tracks[0].segments[0].points:
         st.warning("GPX-Track hat keine Punkte für die Karte.")
         return
@@ -145,10 +223,9 @@ def display_gpx_on_map_ui(gpx_object):
     for track in gpx_object.tracks:
         for segment in track.segments:
             points = [(point.latitude, point.longitude) for point in segment.points]
-            if points: # Ensure there are points to draw
+            if points:
                 folium.PolyLine(points, color="red", weight=2.5, opacity=1).add_to(m)
 
-    # Passe den Zoom der Karte an
     bounds = gpx_object.get_bounds()
     if bounds:
         m.fit_bounds([[bounds.min_latitude, bounds.min_longitude], [bounds.max_latitude, bounds.max_longitude]])
@@ -168,7 +245,6 @@ def display_elevation_profile_ui(gpx_object):
     distances = []
     total_distance_km = 0.0
 
-    # Iterate through all tracks and segments to get elevation and cumulative distance
     for track in gpx_object.tracks:
         for segment in track.segments:
             for i, point in enumerate(segment.points):
@@ -183,13 +259,11 @@ def display_elevation_profile_ui(gpx_object):
         st.warning("Keine Höheninformationen in der GPX-Datei gefunden.")
         return
 
-    # Create a DataFrame for Plotly
     df_elevation = pd.DataFrame({
         'Distanz (km)': distances,
         'Höhe (m)': elevations
     })
 
-    # Create the Plotly figure using graph_objects for more customization
     fig = go.Figure()
 
     fig.add_trace(go.Scatter(
@@ -197,21 +271,21 @@ def display_elevation_profile_ui(gpx_object):
         y=df_elevation['Höhe (m)'],
         mode='lines',
         name='Höhenprofil',
-        line=dict(width=3, color='rgb(63, 103, 126)'), # Darker blue/grey line
-        fill='tozeroy', # Fill area below the line
-        fillcolor='rgba(120, 171, 203, 0.4)' # Lighter blue with transparency
+        line=dict(width=3, color='rgb(63, 103, 126)'),
+        fill='tozeroy',
+        fillcolor='rgba(120, 171, 203, 0.4)'
     ))
 
     fig.update_layout(
         title_text='Höhenprofil',
-        title_x=0.5, # Center title
+        title_x=0.5,
         xaxis_title='Distanz (km)',
         yaxis_title='Höhe (m)',
         hovermode="x unified",
-        plot_bgcolor='rgba(0,0,0,0)', # Transparent plot background
-        paper_bgcolor='rgba(0,0,0,0)', # Transparent paper background
-        font=dict(color='black'), # Default font color
-        margin=dict(l=40, r=40, t=40, b=40) # Adjust margins
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='black'),
+        margin=dict(l=40, r=40, t=40, b=40)
     )
 
     fig.update_xaxes(
@@ -233,15 +307,52 @@ def display_elevation_profile_ui(gpx_object):
 
     st.plotly_chart(fig, use_container_width=True)
 
+def display_fit_data_ui(fit_df):
+    """
+    Zeigt Herzfrequenz- und Leistungskurven aus FIT-Daten an.
+    Erwartet ein Pandas DataFrame mit 'time', 'heart_rate' und 'power' Spalten.
+    """
+    if fit_df is None or fit_df.empty:
+        st.markdown("Keine FIT-Daten zum Anzeigen vorhanden.")
+        return
+
+    st.subheader("FIT-Daten Analyse")
+
+    if not pd.api.types.is_datetime64_any_dtype(fit_df['time']):
+        pass # Zeitstempel sind bereits datetime Objekte
+
+    if 'heart_rate' in fit_df.columns and fit_df['heart_rate'].dropna().any():
+        fig_hr = px.line(fit_df, x='time', y='heart_rate', title='Herzfrequenz über die Zeit',
+                         labels={'time': 'Zeit', 'heart_rate': 'Herzfrequenz (bpm)'})
+        fig_hr.update_layout(hovermode="x unified")
+        st.plotly_chart(fig_hr, use_container_width=True)
+    else:
+        st.info("Keine Herzfrequenzdaten in der FIT-Datei gefunden.")
+
+    if 'power' in fit_df.columns and fit_df['power'].dropna().any():
+        fig_power = px.line(fit_df, x='time', y='power', title='Leistung über die Zeit',
+                            labels={'time': 'Zeit', 'power': 'Leistung (Watt)'})
+        fig_power.update_layout(hovermode="x unified")
+        st.plotly_chart(fig_power, use_container_width=True)
+    else:
+        st.info("Keine Leistungsdaten in der FIT-Datei gefunden.")
+
+    if 'velocity' in fit_df.columns and fit_df['velocity'].dropna().any():
+        fig_vel = px.line(fit_df, x='time', y='velocity', title='Geschwindigkeit über die Zeit',
+                          labels={'time': 'Zeit', 'velocity': 'Geschwindigkeit (m/s)'})
+        fig_vel.update_layout(hovermode="x unified")
+        st.plotly_chart(fig_vel, use_container_width=True)
+
+    if 'cadence' in fit_df.columns and fit_df['cadence'].dropna().any():
+        fig_cad = px.line(fit_df, x='time', y='cadence', title='Trittfrequenz über die Zeit',
+                          labels={'time': 'Zeit', 'cadence': 'Trittfrequenz (rpm)'})
+        fig_cad.update_layout(hovermode="x unified")
+        st.plotly_chart(fig_cad, use_container_width=True)
+
 
 def display_training_details_ui(training_data, on_delete_callback, on_edit_callback):
     """
     Zeigt die Details eines einzelnen Trainings in einem Expander an.
-    training_data: Ein Dictionary mit den Trainingsdetails.
-    on_delete_callback: Eine Funktion, die aufgerufen wird, wenn das Löschen geklickt wird.
-                        Sie sollte die ID des zu löschen Trainings erhalten.
-    on_edit_callback: Eine Funktion, die aufgerufen wird, wenn das Bearbeiten geklickt wird.
-                      Sie sollte die ID des zu bearbeitenden Trainings erhalten.
     """
     expander_title = f"**{training_data['name']}** - {training_data['date']} ({training_data['sportart']})"
     with st.expander(expander_title):
@@ -260,9 +371,7 @@ def display_training_details_ui(training_data, on_delete_callback, on_edit_callb
         else:
             st.markdown("Keine Beschreibung vorhanden.")
 
-        # Lokale Bilder oder URLs anzeigen
         if training_data['image']:
-            # Prüfen, ob es sich um eine lokale Datei oder eine URL handelt
             if training_data['image'].startswith('http'):
                 st.image(training_data['image'], caption=f"Bild für {training_data['name']}", use_container_width=True)
             else:
@@ -274,25 +383,45 @@ def display_training_details_ui(training_data, on_delete_callback, on_edit_callb
 
         st.markdown("**Verlinkte Dateien:**")
 
-        # GPX-Karte anzeigen
         if training_data['gpx_file'] and training_data['gpx_file'] != "-":
             gpx_data = load_gpx_data(training_data['gpx_file'])
-            if gpx_data: # Only display if data was loaded successfully
+            if gpx_data:
+                st.markdown("### GPX-Track auf Karte")
                 display_gpx_on_map_ui(gpx_data)
-                st.markdown("---") # Separator between map and elevation profile
+                st.markdown("---")
+                st.markdown("### Höhenprofil")
                 display_elevation_profile_ui(gpx_data)
         else:
             st.markdown("Keine GPX-Datei verlinkt.")
 
-        # EKG-Datei anzeigen/laden
+        if training_data['fit_file'] and training_data['fit_file'] != "-":
+            fit_data_df = load_fit_data(training_data['fit_file'])
+            if fit_data_df is not None and not fit_data_df.empty:
+                st.markdown("---")
+                st.markdown("### FIT-Dateianalyse")
+                display_fit_data_ui(fit_data_df)
+            else:
+                st.markdown("Keine FIT-Datei verlinkt oder Daten konnten nicht geladen werden.")
+        else:
+            if not (training_data['gpx_file'] and training_data['gpx_file'] != "-"):
+                st.markdown("Keine FIT-Datei verlinkt.")
+
+
         if training_data['ekg_file'] and training_data['ekg_file'] != "-":
             ekg_content = load_ekg_data(training_data['ekg_file'])
             if ekg_content:
                 st.markdown(f"- **EKG-Datei ({training_data['ekg_file']}):**")
                 st.code(ekg_content, language='text')
+            else:
+                if not (training_data['gpx_file'] and training_data['gpx_file'] != "-") and \
+                   not (training_data['fit_file'] and training_data['fit_file'] != "-"):
+                    st.markdown("Keine weiteren Dateien verlinkt.")
         else:
-            if not (training_data['gpx_file'] and training_data['gpx_file'] != "-"):
+            if not (training_data['gpx_file'] and training_data['gpx_file'] != "-") and \
+               not (training_data['fit_file'] and training_data['fit_file'] != "-") and \
+               not (training_data['ekg_file'] and training_data['ekg_file'] != "-"):
                 st.markdown("Keine weiteren Dateien verlinkt.")
+
 
         st.markdown("---")
 
@@ -300,7 +429,7 @@ def display_training_details_ui(training_data, on_delete_callback, on_edit_callb
         with col_edit:
             if st.button("Bearbeiten 📝", key=f"edit_btn_{training_data['id']}"):
                 on_edit_callback(training_data['id'])
-                st.rerun() # Rerun to show the edit form
+                st.rerun()
         with col_delete:
             if st.button("Löschen 🗑️", key=f"delete_btn_{training_data['id']}"):
                 on_delete_callback(training_data['id'])
@@ -310,7 +439,6 @@ def display_training_details_ui(training_data, on_delete_callback, on_edit_callb
 def display_training_list_ui(trainings):
     """
     Zeigt die Liste aller Trainings an.
-    trainings: Eine Liste von Dictionarys mit den Trainingsdaten.
     """
     st.subheader("Deine Trainingsübersicht")
 
@@ -341,15 +469,13 @@ def update_training_in_session_state(updated_training):
         if training['id'] == updated_training['id']:
             st.session_state.trainings[i] = updated_training
             break
-    st.session_state.editing_training_id = None # Reset editing state
+    st.session_state.editing_training_id = None
     st.success("Training erfolgreich aktualisiert!")
     st.rerun()
-
 
 def edit_training_ui(training_data):
     """
     Zeigt ein Formular zum Bearbeiten eines Trainings an.
-    training_data: Ein Dictionary mit den aktuellen Trainingsdetails.
     """
     st.subheader(f"Training bearbeiten: {training_data['name']}")
     with st.form(key=f"edit_training_form_{training_data['id']}"):
@@ -362,14 +488,13 @@ def edit_training_ui(training_data):
         edited_kalorien = st.text_input("Kalorien", value=training_data['kalorien'])
         edited_description = st.text_area("Beschreibung", value=training_data['description'])
         
-        # Keep effort and rating read-only
         st.markdown(f"**Anstrengung (nicht editierbar):** {training_data['anstrengung']}/10")
         st.markdown(f"**Bewertung (nicht editierbar):** {'⭐' * training_data['star_rating']}")
 
-        # File paths can be edited as text inputs, or you could add file uploaders
         edited_image = st.text_input(f"Bilddatei (im Ordner '{IMAGE_DIR}')", value=training_data['image'])
         edited_gpx_file = st.text_input(f"GPX-Datei (im Ordner '{DATA_DIR}')", value=training_data['gpx_file'])
         edited_ekg_file = st.text_input(f"EKG-Datei (im Ordner '{DATA_DIR}')", value=training_data['ekg_file'])
+        edited_fit_file = st.text_input(f"FIT-Datei (im Ordner '{DATA_DIR}')", value=training_data['fit_file'])
 
         submit_button = st.form_submit_button("Änderungen speichern")
         cancel_button = st.form_submit_button("Abbrechen")
@@ -388,10 +513,11 @@ def edit_training_ui(training_data):
                 "image": edited_image,
                 "gpx_file": edited_gpx_file,
                 "ekg_file": edited_ekg_file,
+                "fit_file": edited_fit_file,
             })
             update_training_in_session_state(updated_training)
         elif cancel_button:
-            st.session_state.editing_training_id = None # Exit edit mode
+            st.session_state.editing_training_id = None
             st.rerun()
 
 # --- Hauptanwendung ---
@@ -399,27 +525,22 @@ def main():
     st.title("Dein Trainings-Tagebuch 🏋️‍♂️")
     st.markdown("---")
 
-    # Sicherstellen, dass die Verzeichnisse existieren
     initialize_directories()
 
-    # Initialisiere Trainingsdaten im Session State, falls nicht vorhanden
     if 'trainings' not in st.session_state:
         st.session_state.trainings = get_initial_training_data()
     
-    # Initialize editing state
     if 'editing_training_id' not in st.session_state:
         st.session_state.editing_training_id = None
 
-    # Check if a training is being edited
     if st.session_state.editing_training_id is not None:
         training_to_edit = next((t for t in st.session_state.trainings if t['id'] == st.session_state.editing_training_id), None)
         if training_to_edit:
             edit_training_ui(training_to_edit)
         else:
             st.error("Training zum Bearbeiten nicht gefunden.")
-            st.session_state.editing_training_id = None # Reset if not found
+            st.session_state.editing_training_id = None
     else:
-        # UI zum Anzeigen der Trainingsliste
         display_training_list_ui(st.session_state.trainings)
 
 if __name__ == "__main__":
