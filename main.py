@@ -211,21 +211,8 @@ else: # Benutzer ist eingeloggt
     sidebar_options = ["Dashboard", "Profil", "Workout hinzufügen", "Testseite"]
     if st.session_state["allowed_to_add_profile"]:
         sidebar_options.append("Profil hinzufügen")
-
-    # Sidebar-Navigation mit st.sidebar.radio
-    # Wir setzen den initialen Index basierend auf st.session_state["current_page"]
-    try:
-        default_index = sidebar_options.index(st.session_state["current_page"])
-    except ValueError:
-        default_index = 0 # Fallback auf Dashboard, falls current_page ungültig ist
-
-    selected_page = st.sidebar.radio(
-        "Navigation",
-        options=sidebar_options,
-        index=default_index,
-        key="sidebar_navigation" # Fügen Sie einen eindeutigen Schlüssel hinzu
-    )
-
+    
+    
     # Logout-Button in der Sidebar
     if st.sidebar.button("Logout"):
         st.session_state["logged_in"] = False
@@ -239,20 +226,16 @@ else: # Benutzer ist eingeloggt
 
     # Inhalt der Hauptseite basierend auf der Auswahl laden
     # Dies ersetzt die pg.run() Logik
-    st.session_state["current_page"] = selected_page # Aktuelle Seite im Session State speichern
+    sidebar_pages = [
+        st.Page("pages/dashboard.py", title="Dashboard", icon="📊"),
+        st.Page("pages/Profil.py", title="Profil", icon="👤"),
+        st.Page("pages/add workout.py", title="Workout hinzufügen", icon="🏋️"),
+        st.Page("pages/Trainingsliste.py", title="Testseite", icon="🧪")
+    ]
 
-    if st.session_state["current_page"] == "Dashboard":
-        from pages import dashboard
-        dashboard.show_dashboard()
-    elif st.session_state["current_page"] == "Profil":
-        from pages import Profil
-        Profil.show_profile()
-    elif st.session_state["current_page"] == "Workout hinzufügen":
-        from pages import add_workout
-        add_workout.show_add_workout()
-    elif st.session_state["current_page"] == "Testseite":
-        from pages import Trainingsliste
-        Trainingsliste.show_trainingsliste()
-    elif st.session_state["current_page"] == "Profil hinzufügen" and st.session_state["allowed_to_add_profile"]:
-        from pages import add_profile
-        add_profile.show_add_profile()
+    if st.session_state["allowed_to_add_profile"]:
+        sidebar_pages.append(st.Page("pages/add_profile.py", title="Profil hinzufügen", icon="➕"))
+
+
+    pg = st.navigation(sidebar_pages, position="sidebar", expanded=True)
+    pg.run()
