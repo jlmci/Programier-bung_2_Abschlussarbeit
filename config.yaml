@@ -4,14 +4,6 @@ credentials:
       name: Max Mustermann
       password: passwort123
       person_doc_id: 3
-    yheyer:
-      name: Yannic Heyer
-      password: 12345678
-      person_doc_id: 1
-    jhuber:
-      name: Julian Huber
-      password: abcdef
-      person_doc_id: 2
     admin2:
       name: Janick Hoffmann
       password: '1234'

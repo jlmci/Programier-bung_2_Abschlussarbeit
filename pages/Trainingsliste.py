@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
@@ -12,11 +13,14 @@ import numpy as np
 import fitparse
 from tinydb import TinyDB, Query
 
+# Importiere die Hilfsfunktionen zum Speichern von Dateien und Parsen von GPX/FIT
+# (Diese sind nun im workout_form_utils, aber die Pfadauflösung wird noch hier benötigt)
+# Da diese Datei die Pfade auflöst, belassen wir get_absolute_path hier.
 
 # --- Konfiguration und Initialisierung ---
 IMAGE_DIR = "images"
 DATA_DIR = "data"
-UPLOAD_DIR = "uploaded_files"
+UPLOAD_DIR = "uploaded_files" # Muss hier auch definiert sein, da get_absolute_path es verwendet
 
 def initialize_directories():
     """Stellt sicher, dass notwendige Verzeichnisse existieren."""
@@ -30,90 +34,28 @@ dp = TinyDB('dbperson.json')
 Person = Query()
 Test = Query()
 
-# --- Hilfsfunktionen für die Datenverarbeitung und Dateihandhabung ---
-
-def get_absolute_path(path_from_db):
-    """
-    Versucht, einen Dateipfad, der aus der Datenbank gelesen wurde,
-    in einen absoluten, existierenden Pfad auf dem Dateisystem umzuwandeln.
-
-    Args:
-        path_from_db (str): Der Dateipfad, wie er in der Datenbank gespeichert ist.
-
-    Returns:
-        str oder None: Der absolute Pfad zur Datei, wenn gefunden, sonst None.
-    """
-    if not path_from_db or path_from_db == "-":
-        return None
-
-    # Ermittle das absolute Verzeichnis, in dem das Streamlit-Skript ausgeführt wird.
-    # Dies ist der Ankerpunkt für alle relativen Pfade.
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # --- Versuche, den Pfad aufzulösen (von spezifisch zu allgemeiner) ---
-
-    # 1. Fall: Der Pfad in der DB ist bereits ein vollständiger absoluter Pfad (z.B. C:\User\...)
-    # Dies ist seltener, wenn Sie relative Pfade speichern, aber möglich.
-    if os.path.isabs(path_from_db):
-        if os.path.exists(path_from_db):
-            return path_from_db
-        # Wenn der absolute Pfad nicht existiert, versuchen wir andere Relativ-Pfade als Fallback
-        # Das kann passieren, wenn die Anwendung auf ein anderes System verschoben wird.
-
-    # 2. Fall: Der Pfad in der DB ist relativ zum Skript-Verzeichnis.
-    # Dies ist der häufigste Fall für hochgeladene Dateien (z.B. "uploaded_files/mein_bild.png").
-    candidate_path_relative_to_script = os.path.join(script_dir, path_from_db)
-    if os.path.exists(candidate_path_relative_to_script):
-        return candidate_path_relative_to_script
-
-    # 3. Fall: Der Pfad in der DB ist *nur* der Dateiname (z.B. "mein_bild.png"),
-    # aber die Datei liegt in einem deiner vordefinierten Upload/Image-Verzeichnisse
-    # (relativ zum Skript-Verzeichnis). Dies ist ein wichtiger Fallback.
-    base_filename = os.path.basename(path_from_db) # Extrahiert nur den Dateinamen
-
-    candidate_path_in_upload_dir = os.path.join(script_dir, UPLOAD_DIR, base_filename)
-    if os.path.exists(candidate_path_in_upload_dir):
-        return candidate_path_in_upload_dir
-
-    candidate_path_in_image_dir = os.path.join(script_dir, IMAGE_DIR, base_filename)
-    if os.path.exists(candidate_path_in_image_dir):
-        return candidate_path_in_image_dir
-    
-    # 4. Fall: Der Pfad könnte in der DB ohne das "uploaded_files/" Präfix gespeichert sein,
-    # aber er ist als Pfad *innerhalb* des UPLOAD_DIR gemeint.
-    # Beispiel: DB speichert "2023/bild.png", und UPLOAD_DIR ist "uploaded_files/".
-    # Dann wäre der vollständige Pfad "uploaded_files/2023/bild.png".
-    if path_from_db.startswith(f"{UPLOAD_DIR}{os.sep}"): # Prüft, ob der Pfad schon das UPLOAD_DIR enthält
-        pass # Schon von candidate_path_relative_to_script abgedeckt
-    else:
-        candidate_path_within_upload_dir_full = os.path.join(script_dir, UPLOAD_DIR, path_from_db)
-        if os.path.exists(candidate_path_within_upload_dir_full):
-            return candidate_path_within_upload_dir_full
-
-    # Wenn nach allen Versuchen kein existierender Pfad gefunden wurde
-    return None
-
+# --- Hilfsfunktionen für die Datenverarbeitung und Dateihandhabung (beibehalten in trainingsliste.py) ---
 
 def load_gpx_data(gpx_filepath):
     """
     Lädt und parst eine GPX-Datei.
     Gibt ein gpxpy.GPX-Objekt oder None bei Fehler zurück.
     """
-    #abs_filepath = get_absolute_path(gpx_filepath)
-    if not gpx_filepath or not os.path.exists(gpx_filepath):
+    abs_filepath = gpx_filepath # Wichtig: Pfadauflösung hier
+    if not abs_filepath or not os.path.exists(abs_filepath):
         return None
     try:
-        with open(gpx_filepath, 'r') as gpx_file:
+        with open(abs_filepath, 'r') as gpx_file:
             gpx = gpxpy.parse(gpx_file)
             return gpx
     except FileNotFoundError:
-        st.error(f"Fehler: GPX-Datei '{gpx_filepath}' wurde nicht gefunden.")
+        st.error(f"Fehler: GPX-Datei {repr(gpx_filepath)} wurde nicht gefunden.") # Korrigiert: repr()
         return None
     except gpxpy.gpx.GPXException as e:
-        st.error(f"Fehler beim Parsen der GPX-Datei '{gpx_filepath}': {e}.")
+        st.error(f"Fehler beim Parsen der GPX-Datei {repr(gpx_filepath)}: {e}.") # Korrigiert: repr()
         return None
     except Exception as e:
-        st.error(f"Ein unerwarteter Fehler ist aufgetreten beim Laden von '{gpx_filepath}': {e}")
+        st.error(f"Ein unerwarteter Fehler ist aufgetreten beim Laden von {repr(gpx_filepath)}: {e}") # Korrigiert: repr()
         return None
 
 def load_ekg_data(ekg_filepath):
@@ -121,17 +63,17 @@ def load_ekg_data(ekg_filepath):
     Lädt den Inhalt einer EKG-Datei (oder einer beliebigen Textdatei).
     Gibt den Dateiinhalt als String oder None bei Fehler zurück.
     """
-    #abs_filepath = get_absolute_path(ekg_filepath)
-    if not ekg_filepath or not os.path.exists(ekg_filepath):
+    abs_filepath = ekg_filepath # Wichtig: Pfadauflösung hier
+    if not abs_filepath or not os.path.exists(abs_filepath):
         return None
     try:
-        with open(ekg_filepath, 'r') as f:
+        with open(abs_filepath, 'r') as f:
             return f.read()
     except FileNotFoundError:
-        st.error(f"Fehler: EKG-Datei '{ekg_filepath}' wurde nicht gefunden.")
+        st.error(f"Fehler: EKG-Datei {repr(ekg_filepath)} wurde nicht gefunden.") # Korrigiert: repr()
         return None
     except Exception as e:
-        st.error(f"Fehler beim Lesen der EKG-Datei '{ekg_filepath}': {e}")
+        st.error(f"Fehler beim Lesen der EKG-Datei {repr(ekg_filepath)}: {e}") # Korrigiert: repr()
         return None
 
 def load_fit_data(fit_filepath):
@@ -139,11 +81,11 @@ def load_fit_data(fit_filepath):
     Lädt und parst eine FIT-Datei und extrahiert relevante Daten.
     Gibt ein Pandas DataFrame mit Zeit, Herzfrequenz, Leistung usw. zurück oder None bei Fehler.
     """
-    #abs_filepath = get_absolute_path(fit_filepath)
-    if not fit_filepath or not os.path.exists(fit_filepath):
+    abs_filepath = fit_filepath # Wichtig: Pfadauflösung hier
+    if not abs_filepath or not os.path.exists(abs_filepath):
         return None
     try:
-        fitfile = fitparse.FitFile(fit_filepath)
+        fitfile = fitparse.FitFile(abs_filepath)
 
         time = []
         velocity = []
@@ -190,26 +132,24 @@ def load_fit_data(fit_filepath):
             "cadence": cadence,
             "power": power
         })
+        # Füllen Sie NaN-Werte vor und zurück auf, um durchgehende Linien in Plots zu gewährleisten
         df = df.fillna(method='ffill').fillna(method='bfill')
         return df
 
     except FileNotFoundError:
-        st.error(f"Fehler: FIT-Datei '{fit_filepath}' wurde nicht gefunden.")
+        st.error(f"Fehler: FIT-Datei {repr(fit_filepath)} wurde nicht gefunden.") # Korrigiert: repr()
         return None
     except fitparse.FitParseError as e:
-        st.error(f"Fehler beim Parsen der FIT-Datei '{fit_filepath}': {e}.")
+        st.error(f"Fehler beim Parsen der FIT-Datei {repr(fit_filepath)}: {e}.") # Korrigiert: repr()
         return None
     except Exception as e:
-        st.error(f"Ein unerwarteter Fehler ist aufgetreten beim Laden von '{fit_filepath}': {e}")
+        st.error(f"Ein unerwarteter Fehler ist aufgetreten beim Laden von {repr(fit_filepath)}: {e}") # Korrigiert: repr()
         return None
 
-# --- UI-Komponenten als Funktionen ---
+# --- UI-Komponenten als Funktionen (beibehalten) ---
 
 def display_gpx_on_map_ui(gpx_object):
-    """
-    Zeigt einen GPX-Track auf einer Folium-Karte an.
-    Erwartet ein geparstes gpxpy.GPX-Objekt.
-    """
+    """Zeigt einen GPX-Track auf einer Folium-Karte an."""
     if not gpx_object or not gpx_object.tracks:
         st.markdown("Keine GPX-Daten zum Anzeigen vorhanden.")
         return
@@ -237,7 +177,6 @@ def display_gpx_on_map_ui(gpx_object):
         st.warning("Konnte keinen Startpunkt für die Karte finden.")
         return
 
-
     m = folium.Map(location=[first_point.latitude, first_point.longitude], zoom_start=13)
 
     for track in gpx_object.tracks:
@@ -253,10 +192,7 @@ def display_gpx_on_map_ui(gpx_object):
     folium_static(m)
 
 def display_elevation_profile_ui(gpx_object):
-    """
-    Zeigt ein Höhenprofil basierend auf GPX-Daten an.
-    Erwartet ein geparstes gpxpy.GPX-Objekt.
-    """
+    """Zeigt ein Höhenprofil basierend auf GPX-Daten an."""
     if not gpx_object or not gpx_object.tracks:
         st.markdown("Keine GPX-Daten für das Höhenprofil vorhanden.")
         return
@@ -328,10 +264,7 @@ def display_elevation_profile_ui(gpx_object):
     st.plotly_chart(fig, use_container_width=True)
 
 def display_fit_data_ui(fit_df):
-    """
-    Zeigt Herzfrequenz- und Leistungskurven aus FIT-Daten an.
-    Erwartet ein Pandas DataFrame mit 'time', 'heart_rate' und 'power' Spalten.
-    """
+    """Zeigt Herzfrequenz- und Leistungskurven aus FIT-Daten an."""
     if fit_df is None or fit_df.empty:
         st.markdown("Keine FIT-Daten zum Anzeigen vorhanden.")
         return
@@ -374,6 +307,41 @@ def display_fit_data_ui(fit_df):
         st.plotly_chart(fig_cad, use_container_width=True)
 
 
+# --- Callback-Funktionen (aktualisiert) ---
+def set_training_to_edit(training_id):
+    """
+    Setzt die ID des Trainings, das bearbeitet werden soll, im Session State
+    und wechselt zur Bearbeitungsseite.
+    """
+    st.session_state.editing_training_id = training_id
+    # Reset last_editing_id for workout_form_utils to ensure fresh load
+    if 'last_editing_id' in st.session_state:
+        del st.session_state.last_editing_id
+    st.switch_page("pages/add workout.py") # Wechselt zur Bearbeitungsseite
+
+
+def delete_training_from_db(training_id, person_id):
+    """Löscht ein Training aus dbtests und seine ID aus der ekg_tests Liste in dbperson."""
+    try:
+        db.remove(doc_ids=[training_id])
+        st.success(f"Training mit ID {training_id} erfolgreich aus der Trainingsdatenbank gelöscht.")
+
+        person_doc = dp.get(doc_id=int(person_id))
+        if person_doc:
+            current_ekg_tests = person_doc.get('ekg_tests', [])
+            if training_id in current_ekg_tests:
+                current_ekg_tests.remove(training_id)
+                dp.update({'ekg_tests': current_ekg_tests}, doc_ids=[int(person_id)])
+                st.success(f"Training ID {training_id} erfolgreich aus der Personendatenbank für Person {person_id} entfernt.")
+            else:
+                st.warning(f"Training ID {training_id} wurde nicht in der EKG-Testliste für Person {person_id} gefunden.")
+        else:
+            st.error(f"Fehler: Person mit ID {person_id} nicht in der Personendatenbank gefunden.")
+    except Exception as e:
+        st.error(f"Fehler beim Löschen des Trainings: {e}")
+
+# --- UI für Details und Liste (aktualisiert) ---
+
 def display_training_details_ui(training_data, on_delete_callback, on_edit_callback, expanded=False):
     """
     Zeigt die Details eines einzelnen Trainings in einem Expander an.
@@ -408,62 +376,62 @@ def display_training_details_ui(training_data, on_delete_callback, on_edit_callb
         else:
             st.markdown("Keine Beschreibung vorhanden.")
 
-        image_path = training_data.get('image') # Dies liest den Pfad aus Ihrer DB
-        if image_path and image_path != "-": # Stellt sicher, dass ein Pfad vorhanden ist
-            local_image_path = image_path # <<< Hier wird die Magie der Pfadauflösung vollbracht
-            if local_image_path and os.path.exists(local_image_path):
-                st.image(local_image_path, caption=f"Bild für {training_data['name']}", use_container_width=True)
-            else:
-                # Wichtige Debug-Ausgabe, wenn das Bild nicht gefunden wird
-                st.warning(f"Bilddatei '{image_path}' konnte nicht unter dem aufgelösten Pfad '{local_image_path}' gefunden werden. Bitte prüfen Sie, ob die Datei existiert und der Pfad in der DB korrekt ist.")
+        # Pfadauflösung für das Bild
+        image_path_from_db = training_data.get('image')
+        local_image_path = image_path_from_db
+        if local_image_path and os.path.exists(local_image_path):
+            st.image(local_image_path, caption=f"Bild für {training_data['name']}", use_container_width=True)
+        elif image_path_from_db and image_path_from_db != "-":
+            st.warning(f"Bilddatei {repr(image_path_from_db)} konnte nicht gefunden werden.") # Korrigiert: repr()
 
         st.markdown("**Verlinkte Dateien:**")
 
-        gpx_file_path = training_data.get('gpx_file')
-        if gpx_file_path and gpx_file_path != "-":
-            gpx_data = load_gpx_data(gpx_file_path)
-            if gpx_data:
-                st.markdown("### GPX-Track auf Karte")
-                display_gpx_on_map_ui(gpx_data)
-                st.markdown("---")
-                st.markdown("### Höhenprofil")
-                display_elevation_profile_ui(gpx_data)
+        gpx_file_path_from_db = training_data.get('gpx_file')
+        gpx_data = load_gpx_data(gpx_file_path_from_db) # load_gpx_data enthält nun repr() in seinen Fehlermeldungen
+        if gpx_data:
+            st.markdown("### GPX-Track auf Karte")
+            display_gpx_on_map_ui(gpx_data)
+            st.markdown("---")
+            st.markdown("### Höhenprofil")
+            display_elevation_profile_ui(gpx_data)
         else:
-            st.markdown("Keine GPX-Datei verlinkt.")
-
-        fit_file_path = training_data.get('fit_file')
-        if fit_file_path and fit_file_path != "-":
-            fit_data_df = load_fit_data(fit_file_path)
-            if fit_data_df is not None and not fit_data_df.empty:
-                st.markdown("---")
-                st.markdown("### FIT-Dateianalyse")
-                display_fit_data_ui(fit_data_df)
+            if gpx_file_path_from_db and gpx_file_path_from_db != "-":
+                st.warning(f"GPX-Datei {repr(gpx_file_path_from_db)} konnte nicht geladen oder geparst werden.") # Korrigiert: repr()
             else:
-                st.markdown("Keine FIT-Datei verlinkt oder Daten konnten nicht geladen werden.")
+                st.markdown("Keine GPX-Datei verlinkt.")
 
-        ekg_file_path = training_data.get('ekg_file')
-        if ekg_file_path and ekg_file_path != "-":
-            ekg_content = load_ekg_data(ekg_file_path)
-            if ekg_content:
-                st.markdown(f"- **EKG-Datei ({ekg_file_path}):**")
-                st.code(ekg_content, language='text')
+        fit_file_path_from_db = training_data.get('fit_file')
+        fit_data_df = load_fit_data(fit_file_path_from_db) # load_fit_data enthält nun repr() in seinen Fehlermeldungen
+        if fit_data_df is not None and not fit_data_df.empty:
+            st.markdown("---")
+            st.markdown("### FIT-Dateianalyse")
+            display_fit_data_ui(fit_data_df)
+        else:
+            if fit_file_path_from_db and fit_file_path_from_db != "-":
+                st.warning(f"FIT-Datei {repr(fit_file_path_from_db)} konnte nicht geladen oder geparst werden.") # Korrigiert: repr()
             else:
-                if not (gpx_file_path and gpx_file_path != "-") and \
-                   not (fit_file_path and fit_file_path != "-"):
+                st.markdown("Keine FIT-Datei verlinkt.")
+
+        ekg_file_path_from_db = training_data.get('ekg_file')
+        ekg_content = load_ekg_data(ekg_file_path_from_db) # load_ekg_data enthält nun repr() in seinen Fehlermeldungen
+        if ekg_content:
+            st.markdown(f"- **EKG-Datei ({os.path.basename(ekg_file_path_from_db) if ekg_file_path_from_db else 'N/A'}):**")
+            st.code(ekg_content, language='text')
+        else:
+            if ekg_file_path_from_db and ekg_file_path_from_db != "-":
+                st.warning(f"EKG-Datei {repr(ekg_file_path_from_db)} konnte nicht geladen werden.") # Korrigiert: repr()
+            else:
+                # Zeige dies nur an, wenn keine der anderen Dateien verlinkt ist
+                if not (gpx_file_path_from_db and gpx_file_path_from_db != "-") and \
+                   not (fit_file_path_from_db and fit_file_path_from_db != "-"):
                     st.markdown("Keine weiteren Dateien verlinkt.")
-        else:
-            if not (gpx_file_path and gpx_file_path != "-") and \
-               not (fit_file_path and fit_file_path != "-") and \
-               not (ekg_file_path and ekg_file_path != "-"):
-                st.markdown("Keine weiteren Dateien verlinkt.")
 
         st.markdown("---")
 
         col_edit, col_delete, col_spacer = st.columns([0.15, 0.15, 0.7])
         with col_edit:
             if st.button("Bearbeiten 📝", key=f"edit_btn_{training_id_str}"):
-                on_edit_callback(training_data.doc_id)
-                st.rerun()
+                on_edit_callback(training_data.doc_id) # Ruft die aktualisierte Funktion auf
         with col_delete:
             if st.button("Löschen 🗑️", key=f"delete_btn_{training_id_str}"):
                 on_delete_callback(training_data.doc_id, st.session_state.current_user_id)
@@ -495,6 +463,7 @@ def display_training_list_ui(trainings):
 
     for i, training in enumerate(sorted_trainings):
         is_expanded = (training.doc_id == st.session_state.last_expanded_training_id)
+        # Übergeben Sie set_training_to_edit als Callback
         display_training_details_ui(training, delete_training_from_db, set_training_to_edit, expanded=is_expanded)
 
 # --- Datenbank-Operationen ---
@@ -512,217 +481,10 @@ def get_trainings_for_current_user():
     if person_data and 'ekg_tests' in person_data:
         ekg_test_ids = person_data['ekg_tests']
         all_trainings = db.all()
+        # Filtere die Trainings, die der Person zugeordnet sind
         user_trainings = [t for t in all_trainings if t.doc_id in ekg_test_ids]
         return user_trainings
     return []
-
-def delete_training_from_db(training_id, person_id):
-    """Löscht ein Training aus dbtests und seine ID aus der ekg_tests Liste in dbperson."""
-    try:
-        db.remove(doc_ids=[training_id])
-        st.success(f"Training mit ID {training_id} erfolgreich aus der Trainingsdatenbank gelöscht.")
-
-        person_doc = dp.get(doc_id=int(person_id))
-        if person_doc:
-            current_ekg_tests = person_doc.get('ekg_tests', [])
-            if training_id in current_ekg_tests:
-                current_ekg_tests.remove(training_id)
-                dp.update({'ekg_tests': current_ekg_tests}, doc_ids=[int(person_id)])
-                st.success(f"Training ID {training_id} erfolgreich aus der Personendatenbank für Person {person_id} entfernt.")
-            else:
-                st.warning(f"Training ID {training_id} wurde nicht in der EKG-Testliste für Person {person_id} gefunden.")
-        else:
-            st.error(f"Fehler: Person mit ID {person_id} nicht in der Personendatenbank gefunden.")
-    except Exception as e:
-        st.error(f"Fehler beim Löschen des Trainings: {e}")
-
-
-def set_training_to_edit(training_id):
-    """Setzt die ID des Trainings, das bearbeitet werden soll, im Session State."""
-    st.session_state.editing_training_id = training_id
-
-def update_training_in_db(updated_training_data, training_doc_id):
-    """Aktualisiert ein Training in der TinyDB."""
-    try:
-        db.update(updated_training_data, doc_ids=[training_doc_id])
-        st.session_state.editing_training_id = None
-        # Setze last_editing_id zurück, damit beim nächsten Edit die Werte neu geladen werden
-        st.session_state.last_editing_id = None 
-        st.session_state.initial_expand_done = False
-        st.rerun()
-    except Exception as e:
-        st.error(f"Fehler beim Aktualisieren des Trainings: {e}")
-
-def edit_training_ui(training_data):
-    """
-    Zeigt ein Formular zum Bearbeiten eines Trainings an, ähnlich wie 'add_workout'.
-    """
-    st.subheader(f"Training bearbeiten: {training_data['name']}")
-    
-    # Zustand für die Smiley- und Sterne-Buttons im Bearbeitungsformular
-    # Setze initial nur, wenn der editing_training_id neu ist oder nicht das gleiche Training ist
-    if st.session_state.get('last_editing_id') != training_data.doc_id:
-        st.session_state.edit_selected_antrengung = training_data.get('anstrengung', None)
-        st.session_state.edit_selected_star_rating = training_data.get('star_rating', None)
-    
-    # Speichere die aktuelle ID, um zu erkennen, wann ein neues Training zum Editieren ausgewählt wurde
-    st.session_state.last_editing_id = training_data.doc_id
-
-    # --- Anstrengungsauswahl (Buttons außerhalb des Formulars) ---
-    st.write("---")
-    st.write("Wie anstrengend war das Training?")
-    
-    # Sicherstellen, dass der Wert aus dem Session State gelesen wird
-    antrengung_value = st.session_state.edit_selected_antrengung 
-
-    col1, col2, col3, col4, col5 = st.columns(5)
-    
-    # Logik für Smiley-Buttons: Ähnlich wie Sterne, Button wird zu Text bei Auswahl
-    with col1:
-        if antrengung_value == "good":
-            st.markdown("### 😃 Sehr leicht") # Highlighted
-        elif st.button("😃 Sehr leicht", key=f"smiley_good_{training_data.doc_id}"): # Eindeutiger Key
-            st.session_state.edit_selected_antrengung = "good"
-            st.rerun()
-    with col2:
-        if antrengung_value == "ok":
-            st.markdown("### 🙂 leicht") # Highlighted
-        elif st.button("🙂 leicht", key=f"smiley_ok_{training_data.doc_id}"): # Eindeutiger Key
-            st.session_state.edit_selected_antrengung = "ok"
-            st.rerun()
-    with col3:
-        if antrengung_value == "neutral":
-            st.markdown("### 😐 Neutral") # Highlighted
-        elif st.button("😐 Neutral", key=f"smiley_neutral_{training_data.doc_id}"): # Eindeutiger Key
-            st.session_state.edit_selected_antrengung = "neutral"
-            st.rerun()
-    with col4:
-        if antrengung_value == "acceptable":
-            st.markdown("### 😟 anstrengend") # Highlighted
-        elif st.button("😟 anstrengend", key=f"smiley_acceptable_{training_data.doc_id}"): # Eindeutiger Key
-            st.session_state.edit_selected_antrengung = "acceptable"
-            st.rerun()
-    with col5:
-        if antrengung_value == "bad":
-            st.markdown("### 🥵 sehr anstrengend") # Highlighted
-        elif st.button("🥵 sehr anstrengend", key=f"smiley_bad_{training_data.doc_id}"): # Eindeutiger Key
-            st.session_state.edit_selected_antrengung = "bad"
-            st.rerun()
-
-    # --- Sternebewertung (Highlighting Implementierung) ---
-    st.write("---")
-    st.write("Wie würdest du dieses Workout bewerten?")
-    
-    # Sicherstellen, dass der Wert aus dem Session State gelesen wird
-    star_rating_value = st.session_state.edit_selected_star_rating 
-
-    cols_stars = st.columns(5)
-    for i in range(1, 6):
-        with cols_stars[i-1]:
-            # Wenn der aktuelle Stern der ausgewählte ist, zeige ihn als fettgedruckten Text
-            if star_rating_value == i:
-                st.markdown(f"**{'⭐' * i}**") # Verwende Markdown für fette Sterne
-            # Andernfalls zeige den Button an
-            elif st.button("⭐" * i, key=f"edit_star_button_{i}_{training_data.doc_id}"): # Eindeutiger Key
-                st.session_state.edit_selected_star_rating = i
-                st.rerun() # Führt einen Rerun aus, um den "gehighlighteten" Zustand zu zeigen
-
-
-    st.write("---") # Trennlinie vor dem Formular
-
-    # --- Das Bearbeitungsformular selbst ---
-    with st.form(key=f"edit_training_form_{training_data.doc_id}"):
-        edited_name = st.text_input("Name", value=training_data['name'])
-        
-        # Datumshandhabung: string aus DB zu datetime Objekt für date_input
-        date_obj = datetime.strptime(training_data['date'], "%Y-%m-%d").date()
-        edited_date = st.date_input("Datum", value=date_obj)
-        
-        edited_sportart = st.text_input("Sportart", value=training_data['sportart'])
-
-        st.write("---") # Trennlinie für Dateiuploads
-        
-        current_image_path = training_data.get('image', '')
-        current_gpx_path = training_data.get('gpx_file', '')
-        current_ekg_path = training_data.get('ekg_file', '')
-        current_fit_path = training_data.get('fit_file', '')
-
-        st.markdown(f"**Aktuelles Bild:** {os.path.basename(current_image_path) if current_image_path else 'Kein Bild'}")
-        uploaded_image = st.file_uploader("Neues Bild hochladen (ersetzt aktuelles)", type=["jpg", "jpeg", "png"], key=f"image_uploader_edit_{training_data.doc_id}")
-
-        st.markdown(f"**Aktuelle GPX-Datei:** {os.path.basename(current_gpx_path) if current_gpx_path else 'Keine GPX-Datei'}")
-        uploaded_gpx = st.file_uploader("Neue GPX-Datei hochladen (ersetzt aktuelle)", type=["gpx"], key=f"gpx_uploader_edit_{training_data.doc_id}")
-        
-        st.markdown(f"**Aktuelle EKG-Datei:** {os.path.basename(current_ekg_path) if current_ekg_path else 'Keine EKG-Datei'}")
-        uploaded_ekg = st.file_uploader("Neue EKG-Datei hochladen (ersetzt aktuelle)", type=["csv", "txt"], key=f"ekg_uploader_edit_{training_data.doc_id}")
-
-        st.markdown(f"**Aktuelle FIT-Datei:** {os.path.basename(current_fit_path) if current_fit_path else 'Keine FIT-Datei'}")
-        uploaded_fit = st.file_uploader("Neue FIT-Datei hochladen (ersetzt aktuelle)", type=["fit"], key=f"fit_uploader_edit_{training_data.doc_id}")
-
-        edited_description = st.text_area("Beschreibung", value=training_data.get('description', ''))
-        
-        st.write("---")
-        st.write("Kerninformationen zum Workout (falls nicht in Uploads enthalten):")
-        edited_dauer = st.number_input("Dauer (in Minuten)", min_value=0, step=1, value=int(training_data.get('dauer', 0)))
-        edited_distanz = st.number_input("Distanz (in km)", min_value=0.0, step=0.1, value=float(training_data.get('distanz', 0.0)))
-        edited_puls = st.number_input("Puls (in bpm)", min_value=0, step=1, value=int(training_data.get('puls', 0)))
-        edited_kalorien = st.number_input("Kalorien (in kcal)", min_value=0, step=1, value=int(training_data.get('kalorien', 0)))
-
-        # Submit- und Cancel-Buttons innerhalb des Formulars
-        col_submit, col_cancel = st.columns([0.2, 0.8])
-        with col_submit:
-            submit_button = st.form_submit_button("Änderungen speichern")
-        with col_cancel:
-            cancel_button = st.form_submit_button("Abbrechen")
-
-        if submit_button:
-            # Validierung der Auswahl, die außerhalb des Formulars getroffen wurde
-            if st.session_state.edit_selected_antrengung is None:
-                st.error("Bitte bewerte die Anstrengung des Trainings.")
-                return
-            elif st.session_state.edit_selected_star_rating is None:
-                st.error("Bitte gib eine Sternebewertung ab.")
-                return
-            
-            new_image_path = save_uploaded_file(uploaded_image, "img", edited_name) if uploaded_image else current_image_path
-            new_gpx_path = save_uploaded_file(uploaded_gpx, "gpx", edited_name) if uploaded_gpx else current_gpx_path
-            new_ekg_path = save_uploaded_file(uploaded_ekg, "ekg", edited_name) if uploaded_ekg else current_ekg_path
-            new_fit_path = save_uploaded_file(uploaded_fit, "fit", edited_name) if uploaded_fit else current_fit_path
-
-            updated_training = {
-                "name": edited_name,
-                "date": edited_date.strftime("%Y-%m-%d"),
-                "sportart": edited_sportart,
-                "dauer": edited_dauer,
-                "distanz": edited_distanz,
-                "puls": edited_puls,
-                "kalorien": edited_kalorien,
-                "anstrengung": st.session_state.edit_selected_antrengung, # Wert aus Session State
-                "star_rating": st.session_state.edit_selected_star_rating, # Wert aus Session State
-                "description": edited_description,
-                "image": new_image_path,
-                "gpx_file": new_gpx_path,
-                "ekg_file": new_ekg_path,
-                "fit_file": new_fit_path
-            }
-            update_training_in_db(updated_training, training_data.doc_id)
-        elif cancel_button:
-            st.session_state.editing_training_id = None
-            st.session_state.last_editing_id = None # Reset
-            st.session_state.initial_expand_done = False
-            st.rerun()
-
-
-def save_uploaded_file(uploaded_file, file_prefix, workout_name):
-    if uploaded_file is not None:
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        file_extension = uploaded_file.name.split(".")[-1]
-        safe_name = workout_name.replace(' ', '_').replace('/', '_').replace('\\', '_')
-        file_path = os.path.join(UPLOAD_DIR, f"{safe_name}_{file_prefix}_{timestamp}.{file_extension}")
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        return file_path
-    return None
 
 # --- Hauptanwendung ---
 def main():
@@ -732,7 +494,7 @@ def main():
     initialize_directories()
 
     if "current_user_id" not in st.session_state:
-        st.warning("Bitte wähle im Dashboard zuerst eine Person aus.")
+        st.info("Bitte wähle im Dashboard zuerst eine Person aus, um deine Trainings anzuzeigen.")
         return
 
     if 'editing_training_id' not in st.session_state:
@@ -741,29 +503,9 @@ def main():
     if 'initial_expand_done' not in st.session_state:
         st.session_state.initial_expand_done = False
 
-    if 'last_editing_id' not in st.session_state:
-        st.session_state.last_editing_id = None
-
+    st.subheader("Deine Trainingsübersicht")
     trainings_for_user = get_trainings_for_current_user()
-
-    if st.session_state.editing_training_id is not None:
-        training_to_edit = None
-        for t in trainings_for_user:
-            if t.doc_id == st.session_state.editing_training_id:
-                training_to_edit = t
-                break
-        
-        if training_to_edit:
-            edit_training_ui(training_to_edit)
-        else:
-            st.error("Training zum Bearbeiten nicht gefunden oder gehört nicht zur ausgewählten Person.")
-            st.session_state.editing_training_id = None
-            st.session_state.last_editing_id = None # Reset
-            st.session_state.initial_expand_done = False
-            st.rerun()
-    else:
-        st.subheader("Deine Trainingsübersicht")
-        display_training_list_ui(trainings_for_user)
+    display_training_list_ui(trainings_for_user)
 
 if __name__ == "__main__":
     main()
