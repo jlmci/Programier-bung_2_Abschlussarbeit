@@ -30,7 +30,8 @@ def person_anschauen_page():
     # Add a "Yourself" option
     current_user_name = st.session_state.get("name", "Unbekannt")
     current_user_doc_id = st.session_state.get("person_doc_id")
-    person_options[f"Mich selbst"] = current_user_doc_id 
+    current_user_id = st.session_state.get("person_id")
+    person_options[f"Mich selbst"] = current_user_id 
 
     # Sort the options alphabetically, but keep "Yourself" at the top if present
     sorted_options_display = sorted([key for key in person_options.keys() if "Mich selbst" not in key])
@@ -80,17 +81,18 @@ def person_anschauen_page():
 
                 if st.button(f"Als '{selected_person_name_from_search}' ansehen"):
                     if selected_doc_id_from_search == st.session_state["person_doc_id"]:
-                        st.info("Sie sehen bereits die Daten dieser Person an (Ihre eigenen).")
+                        st.info("Sie sehen bereits die Daten dieser Person an.")
                     else:
                         st.session_state["person_doc_id"] = selected_doc_id_from_search
                         
                         # Update the displayed name
                         selected_person_data = db.get(doc_id=selected_doc_id_from_search)
-                        if selected_person_data:
-                            st.session_state["name"] = f"{selected_person_data.get('firstname', '')} {selected_person_data.get('lastname', '')}"
+                        #if selected_person_data:
+                            #st.session_state["name"] = f"{selected_person_data.get('firstname', '')} {selected_person_data.get('lastname', '')}"
                         
                         st.success(f"Sie sehen nun die Daten von '{st.session_state['name']}' an.")
                         st.info("Navigieren Sie zum Dashboard oder anderen Seiten, um die aktualisierten Daten zu sehen.")
+                        st.switch_page("pages/Profil.py")
                         st.rerun()
         else:
             st.warning("Keine Person mit der angegebenen ID oder dem Namen gefunden.")
@@ -110,25 +112,28 @@ def person_anschauen_page():
         selected_doc_id_from_dropdown = person_options[selected_person_display]
 
     if selected_doc_id_from_dropdown:
-        if st.button(f"Als '{selected_person_display.split(' (ID:')[0]}' ansehen (Liste)"):
+        if st.button(f"Als '{selected_person_display.split(' (ID:')[0]}' ansehen"):
             if selected_doc_id_from_dropdown == st.session_state["person_doc_id"]:
-                st.info("Sie sehen bereits die Daten dieser Person an (Ihre eigenen).")
+                st.info("Sie sehen bereits die Daten dieser Person an.")
+                st.switch_page("pages/Profil.py")
             else:
                 st.session_state["person_doc_id"] = selected_doc_id_from_dropdown
                 
                 # Update the displayed name
                 if selected_doc_id_from_dropdown != current_user_doc_id:
                     selected_person_data = db.get(doc_id=selected_doc_id_from_dropdown)
-                    if selected_person_data:
-                        st.session_state["name"] = selected_person_data.get("firstname", "") + " " + selected_person_data.get("lastname", "")
+                    #if selected_person_data:
+                    #    st.session_state["name"] = selected_person_data.get("firstname", "") + " " + selected_person_data.get("lastname", "")
                 else:
                     # Revert to original name if switching back to self
                     original_username = st.session_state.get("username")
-                    if original_username and "USER_CREDENTIALS" in st.session_state and original_username in st.session_state["USER_CREDENTIALS"]:
-                         st.session_state["name"] = st.session_state["USER_CREDENTIALS"][original_username].get("name", original_username)
+                    #if original_username and "USER_CREDENTIALS" in st.session_state and original_username in st.session_state["USER_CREDENTIALS"]:
+                    #     st.session_state["name"] = st.session_state["USER_CREDENTIALS"][original_username].get("name", original_username)
 
                 st.success(f"Sie sehen nun die Daten von '{selected_person_display.split(' (ID:')[0]}' an.")
+
                 st.info("Navigieren Sie zum Dashboard oder anderen Seiten, um die aktualisierten Daten zu sehen.")
+                st.switch_page("pages/Profil.py")
                 st.rerun()
 
 # This is how Streamlit will run the page when it's selected

@@ -1,20 +1,20 @@
 credentials:
   usernames:
-    mmustermann:
-      name: Max Mustermann
-      password: passwort123
-      person_doc_id: 3
-    admin2:
-      name: Janick Hoffmann
-      password: '1234'
-      person_doc_id: 4
     admin1:
       name: Jakob Laurner
       password: '1234'
       person_doc_id: 5
-    mt:
-      name: Max test
+    admin2:
+      name: Janick Hoffmann
       password: '1234'
+      person_doc_id: 4
+    mmustermann:
+      name: Max Mustermann
+      password: passwort123
+      person_doc_id: 3
+    mt1:
+      name: Max2 test
+      password: '12345'
       person_doc_id: 6
     mt2:
       name: Max t2

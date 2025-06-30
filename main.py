@@ -1,11 +1,13 @@
 import streamlit as st
 import yaml
 from yaml.loader import SafeLoader
+from tinydb import TinyDB, Query
 
 # --- Initial Page Setup (before any other Streamlit commands) ---
 # Sidebar standardmäßig einklappen
 st.set_page_config(page_title="Trainingstagebuch", page_icon="💪", layout="wide", initial_sidebar_state="collapsed")
 
+#db = TinyDB('dbperson.json')
 
 # Initialize the session state for login status and user details.
 if "logged_in" not in st.session_state:
@@ -23,6 +25,7 @@ if "person_id" not in st.session_state:
 # Neu: Session State für die aktuell ausgewählte Seite
 if "current_page" not in st.session_state:
     st.session_state["current_page"] = "Login"
+
 
 
 # --- Benutzerdaten aus config.yaml laden ---
@@ -63,11 +66,13 @@ if not st.session_state["logged_in"]:
                     st.session_state["username"] = input_username
                     st.session_state["name"] = user_data_from_config.get("name", input_username)
                     
+                    
                     current_person_doc_id = user_data_from_config.get("person_doc_id")
                     st.session_state["person_doc_id"] = current_person_doc_id
 
                     current_person_id = user_data_from_config.get("person_doc_id")
                     st.session_state["person_id"] = current_person_id
+               
 
                     if current_person_doc_id is not None and current_person_doc_id in ADD_PROFILE_WHITELIST:
                         st.session_state["admin"] = True

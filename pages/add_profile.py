@@ -66,10 +66,10 @@ if not st.session_state.get("logged_in", False):
     st.warning("Bitte loggen Sie sich zuerst in der Hauptanwendung ein.")
     st.stop()
 
-current_user_doc_id = st.session_state.get("person_doc_id")
-if current_user_doc_id is None or current_user_doc_id not in ADD_PROFILE_WHITELIST:
+admin = st.session_state.get("admin")
+if not admin :
     st.error("Sie haben keine Berechtigung, neue Profile hinzuzufügen. Ihre ID ist nicht auf der Whitelist.")
-    st.info(f"Ihre ID: {current_user_doc_id}. Erlaubte IDs: {ADD_PROFILE_WHITELIST}")
+    #st.info(f"Ihre ID: {current_user_doc_id}. Erlaubte IDs: {ADD_PROFILE_WHITELIST}")
     st.stop()
 
 

@@ -13,7 +13,7 @@ ekg_tests_db = TinyDB(EKG_TESTS_DB_PATH)
 # --- Person Klasse Definition ---
 class Person:
     def __init__(self, doc_id: int, date_of_birth: int, firstname: str, lastname: str,
-                 picture_path: str, gender: str, ekg_test_ids: list):
+                 picture_path: str, gender: str, ekg_test_ids: list, maximal_hr: int = None):
         self.doc_id = doc_id
         self.date_of_birth = date_of_birth
         self.firstname = firstname
@@ -21,6 +21,10 @@ class Person:
         self.picture_path = picture_path
         self.gender = gender
         self.ekg_test_ids = ekg_test_ids
+        if maximal_hr is not None:
+            self.maximal_hr = maximal_hr
+        else:
+            self.maximal_hr = Person.max_hr()
 
         from datetime import datetime
         heute = datetime.now() # Holt das aktuelle Datum und die aktuelle Uhrzeit
