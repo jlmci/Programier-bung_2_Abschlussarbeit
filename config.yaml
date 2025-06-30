@@ -12,6 +12,14 @@ credentials:
       name: Jakob Laurner
       password: '1234'
       person_doc_id: 5
+    mt:
+      name: Max test
+      password: '1234'
+      person_doc_id: 6
+    mt2:
+      name: Max t2
+      password: '1234'
+      person_doc_id: 7
 permissions:
   can_add_profile_doc_ids:
   - 4
