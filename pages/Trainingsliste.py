@@ -7,11 +7,16 @@ import gpxpy
 import gpxpy.gpx
 from streamlit_folium import folium_static
 import os
+import sys
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 import fitparse
 from tinydb import TinyDB, Query
+
+project_root = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, project_root)
+from auswertungen.ekgdata import EKGdata
 
 # Importiere die Hilfsfunktionen zum Speichern von Dateien und Parsen von GPX/FIT
 # (Diese sind nun im workout_form_utils, aber die Pfadauflösung wird noch hier benötigt)
@@ -60,20 +65,73 @@ def load_gpx_data(gpx_filepath):
 
 def load_ekg_data(ekg_filepath):
     """
-    Lädt den Inhalt einer EKG-Datei (oder einer beliebigen Textdatei).
-    Gibt den Dateiinhalt als String oder None bei Fehler zurück.
+    Lädt EKG-Daten aus einer TXT- oder CSV-Datei, erstellt ein EKGdata-Objekt
+    und gibt das Plotly-Diagramm der EKG-Zeitreihe zurück, indem es die
+    plot_time_series Methode der EKGdata-Klasse verwendet.
+    
+    Args:
+        ekg_filepath (str): Der vollständige Pfad zur EKG-Datei (.txt oder .csv).
+
+    Returns:
+        plotly.graph_objects.Figure: Ein Plotly-Figure-Objekt des EKG-Diagramms,
+                                     oder None, falls ein Fehler auftritt.
     """
-    abs_filepath = ekg_filepath # Wichtig: Pfadauflösung hier
+    abs_filepath = ekg_filepath 
+    
     if not abs_filepath or not os.path.exists(abs_filepath):
+        st.error(f"Fehler: EKG-Datei {repr(ekg_filepath)} wurde nicht gefunden oder der Pfad ist ungültig.")
         return None
+    
+    # Da deine EKGdata.__init__-Methode ein ekg_dict erwartet, müssen wir die Datei hier lesen
+    # und ein solches Dict simulieren.
+    _, file_extension = os.path.splitext(abs_filepath)
+    df = None
     try:
-        with open(abs_filepath, 'r') as f:
-            return f.read()
-    except FileNotFoundError:
-        st.error(f"Fehler: EKG-Datei {repr(ekg_filepath)} wurde nicht gefunden.") # Korrigiert: repr()
+        if file_extension.lower() == '.txt':
+            df = pd.read_csv(abs_filepath, sep='\t', header=None, names=['Messwerte in mV', 'Zeit in ms'])
+        elif file_extension.lower() == '.csv':
+            df = pd.read_csv(abs_filepath, header=None, names=['Messwerte in mV', 'Zeit in ms'])
+        else:
+            st.error(f"Fehler: Dateiformat {file_extension} wird nicht unterstützt. Bitte verwenden Sie .txt oder .csv.")
+            return None
+
+        if df.empty:
+            st.warning(f"Warnung: Die Datei {abs_filepath} wurde geladen, ist aber leer.")
+            return None
+
+        # Jetzt erstellen wir ein Dummy-ekg_dict, das deine EKGdata-Klasse verstehen kann.
+        # WICHTIG: Die EKGdata-Klasse in deiner ursprünglichen Definition kann NUR 'result_link' als Pfad lesen.
+        # Sie lädt die Daten NICHT aus dem result_link in den df im Konstruktor, sondern erwartet,
+        # dass result_link der PFAD zur Datei ist, die dann dort gelesen wird.
+        # Da wir die Datei hier schon gelesen haben, ist das etwas unpraktisch,
+        # ABER du wolltest die Klasse nicht ändern.
+        # Die EKGdata-Klasse in deiner Definition LÄDT SELBST das result_link.
+        # Daher muss der result_link der tatsächliche Dateipfad sein!
+
+        ekg_dict_for_class = {
+            "id": os.path.basename(abs_filepath), # Verwende Dateinamen als Dummy-ID
+            "date": "Unbekannt", # Datum ist unbekannt, wenn direkt von Datei
+            "result_link": abs_filepath # Dies ist der Pfad, den EKGdata lesen wird
+        }
+        
+        ekg_obj = EKGdata(ekg_dict_for_class)
+        
+        # Überprüfen, ob das EKGdata-Objekt die Daten erfolgreich geladen hat
+        if ekg_obj.df is None or ekg_obj.df.empty:
+            st.error(f"Fehler: EKGdata-Klasse konnte die Daten aus {repr(abs_filepath)} nicht laden oder parsen.")
+            return None
+        
+        # Rufe die plot_time_series Methode des EKGdata-Objekts auf,
+        # die das Plotly-Figure-Objekt zurückgibt.
+        fig = ekg_obj.plot_time_series()
+        st.plotly_chart(fig, use_container_width=True)
+        return True
+        
+    except pd.errors.EmptyDataError:
+        st.warning(f"Warnung: Die Datei {abs_filepath} ist leer oder enthält keine Daten zum Parsen.")
         return None
     except Exception as e:
-        st.error(f"Fehler beim Lesen der EKG-Datei {repr(ekg_filepath)}: {e}") # Korrigiert: repr()
+        st.error(f"Fehler beim Laden oder Verarbeiten der EKG-Datei {repr(abs_filepath)}: {e}")
         return None
 
 def load_fit_data(fit_filepath):
@@ -414,10 +472,7 @@ def display_training_details_ui(training_data, on_delete_callback, on_edit_callb
 
         ekg_file_path_from_db = training_data.get('ekg_file')
         ekg_content = load_ekg_data(ekg_file_path_from_db) # load_ekg_data enthält nun repr() in seinen Fehlermeldungen
-        if ekg_content:
-            st.markdown(f"- **EKG-Datei ({os.path.basename(ekg_file_path_from_db) if ekg_file_path_from_db else 'N/A'}):**")
-            st.code(ekg_content, language='text')
-        else:
+        if not ekg_content:
             if ekg_file_path_from_db and ekg_file_path_from_db != "-":
                 st.warning(f"EKG-Datei {repr(ekg_file_path_from_db)} konnte nicht geladen werden.") # Korrigiert: repr()
             else:

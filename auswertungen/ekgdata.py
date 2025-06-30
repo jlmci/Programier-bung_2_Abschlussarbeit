@@ -42,7 +42,7 @@ class EKGdata:
         return ekg_test
    
 
-    def find_peaks_no_loop(self, respacing_factor=5):
+    def find_peaks(self, respacing_factor=5):
         """
         A function to find the peaks in a series completely without explicit loops.
 
