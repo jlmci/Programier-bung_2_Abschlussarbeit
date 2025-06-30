@@ -349,7 +349,7 @@ def save_config(config_data):
 # Session State for the current user's ID
 # Ensure current_user_id is properly set from main.py's login
 if "person_doc_id" not in st.session_state or st.session_state["person_doc_id"] is None:
-    st.error("Keine Person ausgewählt. Bitte loggen Sie sich ein oder wählen Sie eine Person.")
+    st.error("Bitte warten")
     st.stop()
 
 st.session_state.current_user_id = str(st.session_state["person_doc_id"])

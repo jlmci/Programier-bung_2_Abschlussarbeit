@@ -79,7 +79,9 @@ def load_ekg_data(ekg_filepath):
     abs_filepath = ekg_filepath 
     
     if not abs_filepath or not os.path.exists(abs_filepath):
-        st.error(f"Fehler: EKG-Datei {repr(ekg_filepath)} wurde nicht gefunden oder der Pfad ist ungültig.")
+        if abs_filepath == None:
+            st.write("Keine EKG-Datei verlinkt.")
+        #st.error(f"Fehler: EKG-Datei {repr(ekg_filepath)} wurde nicht gefunden oder der Pfad ist ungültig.")
         return None
     
     # Da deine EKGdata.__init__-Methode ein ekg_dict erwartet, müssen wir die Datei hier lesen
@@ -549,7 +551,7 @@ def main():
     initialize_directories()
 
     if "current_user_id" not in st.session_state:
-        st.info("Bitte wähle im Dashboard zuerst eine Person aus, um deine Trainings anzuzeigen.")
+        st.info("Bitte warten")
         return
 
     if 'editing_training_id' not in st.session_state:
