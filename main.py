@@ -25,6 +25,8 @@ if "person_id" not in st.session_state:
 # Neu: Session State für die aktuell ausgewählte Seite
 if "current_page" not in st.session_state:
     st.session_state["current_page"] = "Login"
+if "profile_to_see_name" not in st.session_state:
+    st.session_state["profile_to_see_name"] = None
 
 
 
@@ -84,6 +86,7 @@ if not st.session_state["logged_in"]:
                                    "Bitte fügen Sie eine hinzu, um auf die Datenbank zuzugreifen. Sie sind dennoch eingeloggt.")
                     
                     st.success(f"Willkommen, {st.session_state['name']}!")
+                    
                     # Nach erfolgreichem Login zur Dashboard-Seite weiterleiten
                     st.session_state["current_page"] = "Dashboard"
                     st.rerun()
@@ -100,6 +103,9 @@ else: # Benutzer ist eingeloggt
     # Da wir nun die Sidebar manuell befüllen, wird sie nur angezeigt, wenn dieser Else-Block läuft.
     
     st.sidebar.markdown(f"**Willkommen, {st.session_state['name']}!**")
+    if st.session_state["person_doc_id"] != st.session_state["person_id"]:
+                        nameto_see = st.session_state["profile_to_see_name"]
+                        st.sidebar.markdown(f"**Du siehst das profil von, {nameto_see}!**")
     
     # Optionen für die Sidebar-Navigation
     sidebar_options = ["Dashboard", "Profil", "Workout hinzufügen", "Testseite", "Person anschauen"]

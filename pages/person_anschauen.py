@@ -84,6 +84,7 @@ def person_anschauen_page():
                         st.info("Sie sehen bereits die Daten dieser Person an.")
                     else:
                         st.session_state["person_doc_id"] = selected_doc_id_from_search
+                        st.session_state["profile_to_see_name"] = selected_person_name_from_search
                         
                         # Update the displayed name
                         selected_person_data = db.get(doc_id=selected_doc_id_from_search)
@@ -118,6 +119,9 @@ def person_anschauen_page():
                 st.switch_page("pages/Profil.py")
             else:
                 st.session_state["person_doc_id"] = selected_doc_id_from_dropdown
+                person_data = db.get(doc_id=selected_doc_id_from_dropdown)
+                name = f"{person_data.get('firstname', '')} {person_data.get('lastname', '')}" if person_data else "Unbekannt"
+                st.session_state["profile_to_see_name"] = name
                 
                 # Update the displayed name
                 if selected_doc_id_from_dropdown != current_user_doc_id:
