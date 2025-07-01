@@ -6,6 +6,7 @@ import gpxpy
 import gpxpy.gpx
 import pandas as pd
 from fitparse import FitFile # Import the fitparse library
+import numpy as np # Import numpy for numerical operations
 
 # --- Konfiguration & Konstanten ---
 UPLOAD_DIR = "uploaded_files"
@@ -44,103 +45,181 @@ def save_uploaded_file(uploaded_file, file_prefix, workout_name):
 # --- Funktion zum Parsen von GPX-Dateien ---
 def parse_gpx_data(gpx_file_path):
     """
-    Parst eine GPX-Datei und extrahiert Dauer, Distanz, Datum, gegebenenfalls Sportart.
+    Parst eine GPX-Datei und extrahiert Dauer, Distanz, Datum,
+    Durchschnittsgeschwindigkeit und Höhenmeter (hoch und runter).
 
     Args:
         gpx_file_path (str): Der Pfad zur GPX-Datei.
 
     Returns:
-        tuple: (duration_minutes, total_distance_km, start_date, sportart) oder (0, 0.0, None, None) bei Fehler.
+        tuple: (duration_minutes, total_distance_km, start_date, avg_speed_kmh, elevation_gain_pos, elevation_gain_neg)
+               oder (0, 0.0, None, None, 0.0, 0, 0) bei Fehler.
     """
     duration_minutes = 0
     total_distance_km = 0.0
     min_time = None
     max_time = None
     start_date = None
-    sportart = None # GPX files don't typically store sport type directly in a parseable field
+    avg_speed_kmh = 0.0
+    elevation_gain_pos = 0
+    elevation_gain_neg = 0
+    
+    elevations = []
+    times = []
+    distances = []
 
     if not os.path.exists(gpx_file_path):
-        return 0, 0.0, None, None
+        return 0, 0.0, None, None, 0.0, 0, 0
 
     try:
         with open(gpx_file_path, 'r') as gpx_file:
             gpx = gpxpy.parse(gpx_file)
 
+        # Extract points for elevation and time calculations
+        current_distance = 0.0
+        prev_point = None
         for track in gpx.tracks:
             if track.segments:
                 for segment in track.segments:
-                    for point in segment.points:
+                    for i, point in enumerate(segment.points):
                         if point.time:
                             if min_time is None or point.time < min_time:
                                 min_time = point.time
                             if max_time is None or point.time > max_time:
                                 max_time = point.time
-            # Try to get sport from track name if available
-            if track.name and not sportart:
-                sportart = track.name
+                            times.append(point.time)
+
+                        if point.elevation is not None:
+                            elevations.append(point.elevation)
+                        
+                        if prev_point:
+                            # Calculate distance between points
+                            point_distance_2d = point.distance_2d(prev_point)
+                            current_distance += point_distance_2d
+                        distances.append(current_distance) # Store cumulative distance
+                        prev_point = point
+
         
         if min_time and max_time:
             time_difference = max_time - min_time
             duration_minutes = int(time_difference.total_seconds() / 60)
             start_date = min_time.date()
         
+        # Total distance from gpxpy (more accurate than summing point-to-point 2D distances for total)
         total_distance_meters = gpx.length_2d()
         total_distance_km = total_distance_meters / 1000.0
 
-        return duration_minutes, total_distance_km, start_date, sportart
+        # Calculate average speed
+        if duration_minutes > 0:
+            avg_speed_kmh = (total_distance_km / duration_minutes) * 60 # km/min * 60 min/h = km/h
+        
+        # Calculate Elevation Gain (Positive and Negative)
+        if len(elevations) > 1:
+            diff_elevations = np.diff(elevations)
+            elevation_gain_pos = int(np.sum(diff_elevations[diff_elevations > 0]))
+            elevation_gain_neg = int(np.sum(diff_elevations[diff_elevations < 0]))
+            
+        return duration_minutes, total_distance_km, start_date, avg_speed_kmh, elevation_gain_pos, abs(elevation_gain_neg)
     except Exception as e:
         st.error(f"Fehler beim Parsen der GPX-Datei: {e}")
-        return 0, 0.0, None, None
+        return 0, 0.0, None, None, 0.0, 0, 0
 
 # --- Funktion zum Parsen von FIT-Dateien ---
 def parse_fit_data(fit_file_path):
     """
-    Parst eine FIT-Datei und extrahiert Dauer, Distanz, Datum, Sportart und Puls.
+    Parst eine FIT-Datei und extrahiert Dauer, Distanz, Datum, Sportart, Puls,
+    Durchschnittsgeschwindigkeit und Höhenmeter (hoch und runter).
 
     Args:
         fit_file_path (str): Der Pfad zur FIT-Datei.
 
     Returns:
-        tuple: (duration_minutes, total_distance_km, start_date, sportart, average_heart_rate) oder (0, 0.0, None, None, 0) bei Fehler.
+        tuple: (duration_minutes, total_distance_km, start_date, sportart, average_heart_rate, avg_speed_kmh, elevation_gain_pos, elevation_gain_neg)
+               oder (0, 0.0, None, None, 0, 0.0, 0, 0) bei Fehler.
     """
     duration_minutes = 0
     total_distance_km = 0.0
     start_date = None
     sportart = None
     heart_rates = []
+    speeds = []
+    elevations = []
 
     if not os.path.exists(fit_file_path):
-        return 0, 0.0, None, None, 0
+        return 0, 0.0, None, None, 0, 0.0, 0, 0
 
     try:
         fitfile = FitFile(fit_file_path)
         
-        # Iterate over all messages of type 'record'
-        for record in fitfile.get_messages('record'):
-            for data in record:
-                if data.name == 'timestamp' and start_date is None:
-                    start_date = data.value.date()
-                if data.name == 'distance':
-                    # Fit files typically store distance in meters
-                    total_distance_km = max(total_distance_km, data.value / 1000.0) 
-                if data.name == 'heart_rate':
-                    heart_rates.append(data.value)
+        min_timestamp = None
+        max_timestamp = None
 
-        # Get session messages for duration and sport
+        for record in fitfile.get_messages('record'):
+            timestamp = record.get_value('timestamp')
+            if timestamp:
+                if min_timestamp is None or timestamp < min_timestamp:
+                    min_timestamp = timestamp
+                if max_timestamp is None or timestamp > max_timestamp:
+                    max_timestamp = timestamp
+                if start_date is None: # Set start_date from the first timestamp
+                    start_date = timestamp.date()
+
+            # Distance is cumulative, so take the max value
+            distance_meters = record.get_value('distance')
+            if distance_meters is not None:
+                total_distance_km = max(total_distance_km, distance_meters / 1000.0) 
+            
+            hr_val = record.get_value('heart_rate')
+            if hr_val is not None:
+                heart_rates.append(hr_val)
+            
+            speed_val_ms = record.get_value('speed') # speed in m/s
+            if speed_val_ms is not None:
+                speeds.append(speed_val_ms)
+
+            elevation_val = record.get_value('altitude') # altitude in meters
+            if elevation_val is not None:
+                elevations.append(elevation_val)
+
+
+        # Get session messages for total duration and sport (prefer these if available)
         for session in fitfile.get_messages('session'):
             if session.get_value('total_timer_time'):
                 duration_minutes = int(session.get_value('total_timer_time') / 60)
             if session.get_value('sport'):
-                # Convert sport enum to string
                 sportart = str(session.get_value('sport')).replace('_', ' ').title()
 
         average_heart_rate = int(sum(heart_rates) / len(heart_rates)) if heart_rates else 0
+        
+        avg_speed_kmh = 0.0
+        if speeds:
+            # Average of speeds from records (in m/s), then convert to km/h
+            avg_speed_ms = np.mean(speeds)
+            avg_speed_kmh = avg_speed_ms * 3.6 # m/s * (3600 s / 1000 m) = km/h
+        
+        # Fallback for duration and speed if session data is missing, using timestamps
+        if duration_minutes == 0 and min_timestamp and max_timestamp:
+            time_diff_seconds = (max_timestamp - min_timestamp).total_seconds()
+            duration_minutes = int(time_diff_seconds / 60)
+            if total_distance_km > 0 and duration_minutes > 0:
+                # Recalculate average speed if duration was derived from timestamps and total_distance_km exists
+                avg_speed_kmh = (total_distance_km / duration_minutes) * 60
 
-        return duration_minutes, total_distance_km, start_date, sportart, average_heart_rate
+        # Calculate Elevation Gain (Positive and Negative)
+        elevation_gain_pos = 0
+        elevation_gain_neg = 0
+        if len(elevations) > 1:
+            # Ensure elevations are float for diff, then convert back to int for sum
+            diff_elevations = np.diff(np.array(elevations, dtype=float))
+            elevation_gain_pos = int(np.sum(diff_elevations[diff_elevations > 0]))
+            elevation_gain_neg = int(np.sum(diff_elevations[diff_elevations < 0]))
+
+
+        return duration_minutes, total_distance_km, start_date, sportart, average_heart_rate, avg_speed_kmh, elevation_gain_pos, abs(elevation_gain_neg)
 
     except Exception as e:
         st.error(f"Fehler beim Parsen der FIT-Datei: {e}")
-        return 0, 0.0, None, None, 0
+        return 0, 0.0, None, None, 0, 0.0, 0, 0
 
 
 # --- Hilfsfunktion zur Formatierung der Dauer ---
@@ -182,7 +261,6 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
         st.session_state[f"{prefix}date_input"] = date_val
 
         st.session_state[f"{prefix}sportart_input"] = initial_data.get('sportart', "") if is_edit_mode else ""
-        # Speichere die Dauer immer noch als Minuten, aber handhabe die Anzeige anders
         st.session_state[f"{prefix}dauer_total_minutes_input"] = int(initial_data.get('dauer', 0)) if is_edit_mode else 0
         st.session_state[f"{prefix}distanz_input"] = float(initial_data.get('distanz', 0.0)) if is_edit_mode else 0.0
         st.session_state[f"{prefix}puls_input"] = int(initial_data.get('puls', 0)) if is_edit_mode else 0
@@ -191,6 +269,11 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
         st.session_state[f"{prefix}selected_antrengung"] = initial_data.get('anstrengung', None) if is_edit_mode else None
         st.session_state[f"{prefix}selected_star_rating"] = initial_data.get('star_rating', None) if is_edit_mode else None
         
+        # Neue Initialisierungen für Durchschnittsgeschwindigkeit und Höhenmeter
+        st.session_state[f"{prefix}avg_speed_input"] = float(initial_data.get('avg_speed_kmh', 0.0)) if is_edit_mode else 0.0
+        st.session_state[f"{prefix}elevation_gain_pos_input"] = int(initial_data.get('elevation_gain_pos', 0)) if is_edit_mode else 0
+        st.session_state[f"{prefix}elevation_gain_neg_input"] = int(initial_data.get('elevation_gain_neg', 0)) if is_edit_mode else 0
+
         st.session_state[f"{prefix}current_image_path"] = initial_data.get('image', None) if is_edit_mode else None
         st.session_state[f"{prefix}current_gpx_path"] = initial_data.get('gpx_file', None) if is_edit_mode else None
         st.session_state[f"{prefix}current_ekg_path"] = initial_data.get('ekg_file', None) if is_edit_mode else None
@@ -198,50 +281,48 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
 
         # Dies ist der Schlüssel, der anzeigt, wann die Initialisierung erfolgt ist
         st.session_state[f"{prefix}last_loaded_id_check"] = initial_doc_id
-    name = st.text_input("Name des Workouts", placeholder="Test 1", value=st.session_state.get(f"{prefix}name_input", ""), key=f"{prefix}name_input_form")
-    st.write("---")
 
-    # --- Anstrengung (Smiley-Buttons) ---
+
+    # --- Buttons für Anstrengung (Smiley-Buttons) ---
     st.write("Wie anstrengend war das Training?")
     col1, col2, col3, col4, col5 = st.columns(5)
-    # Sicherstellen, dass der Wert existiert, bevor er gelesen wird
     antrengung_value = st.session_state.get(f"{prefix}selected_antrengung", None)
 
     with col1:
         if antrengung_value == "good":
             st.markdown("### 😃 Sehr leicht")
-        elif st.button("😃 Sehr leicht", key=f"{prefix}smiley_good_btn"):
+        elif st.button("😃 Sehr leicht", key=f"{prefix}smiley_good_btn"): 
             st.session_state[f"{prefix}selected_antrengung"] = "good"
             st.rerun()
     with col2:
         if antrengung_value == "ok":
             st.markdown("### 🙂 leicht")
-        elif st.button("🙂 leicht", key=f"{prefix}smiley_ok_btn"):
-            st.session_state[f"{prefix}selected_antrengung"] = "ok"
+        # FEHLER BEHOBEN: Hier war f"{prefix}prefix}"
+        elif st.button("🙂 leicht", key=f"{prefix}smiley_ok_btn"): 
+            st.session_state[f"{prefix}selected_antrengung"] = "ok" # <-- Hier war der Fehler
             st.rerun()
     with col3:
         if antrengung_value == "neutral":
             st.markdown("### 😐 Neutral")
-        elif st.button("😐 Neutral", key=f"{prefix}smiley_neutral_btn"):
+        elif st.button("😐 Neutral", key=f"{prefix}smiley_neutral_btn"): 
             st.session_state[f"{prefix}selected_antrengung"] = "neutral"
             st.rerun()
     with col4:
         if antrengung_value == "acceptable":
             st.markdown("### 😟 anstrengend")
-        elif st.button("😟 anstrengend", key=f"{prefix}smiley_acceptable_btn"):
+        elif st.button("😟 anstrengend", key=f"{prefix}smiley_acceptable_btn"): 
             st.session_state[f"{prefix}selected_antrengung"] = "acceptable"
             st.rerun()
     with col5:
         if antrengung_value == "bad":
             st.markdown("### 🥵 sehr anstrengend")
-        elif st.button("🥵 sehr anstrengend", key=f"{prefix}smiley_bad_btn"):
+        elif st.button("🥵 sehr anstrengend", key=f"{prefix}smiley_bad_btn"): 
             st.session_state[f"{prefix}selected_antrengung"] = "bad"
             st.rerun()
 
     # --- Sternebewertung (Highlighting Implementierung) ---
     st.write("---")
     st.write("Wie würdest du dieses Workout bewerten?")
-    # Sicherstellen, dass der Wert existiert, bevor er gelesen wird
     star_rating_value = st.session_state.get(f"{prefix}selected_star_rating", None)
 
     cols_stars = st.columns(5)
@@ -249,13 +330,13 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
         with cols_stars[i-1]:
             if star_rating_value == i:
                 st.markdown(f"**{'⭐' * i}**")
-            elif st.button("⭐" * i, key=f"{prefix}star_button_{i}_btn"):
+            elif st.button("⭐" * i, key=f"{prefix}star_button_{i}_btn"): 
                 st.session_state[f"{prefix}selected_star_rating"] = i
                 st.rerun()
 
     st.write("---")
 
-    # --- Dateiuploader (Außerhalb des Formulars) ---
+    # --- Dateiuploader (MÜSSEN außerhalb des Formulars bleiben) ---
     uploaded_image_file = st.file_uploader("Bild hochladen", type=["jpg", "jpeg", "png"], help="Optional: Füge ein Bild deines Workouts hinzu.", key=f"{prefix}image_uploader")
     uploaded_gpx_file = st.file_uploader("GPX Datei hochladen", type=["gpx"], help="Optional: Füge eine GPX-Datei deines Workouts hinzu. Max. Größe = 200MB", key=f"{prefix}gpx_uploader")
     uploaded_ekg_file = st.file_uploader("EKG Datei hochladen", type=["csv", "txt"], help="Optional: Füge eine EKG-Datei deines Workouts hinzu. Max. Größe = 200MB", key=f"{prefix}ekg_uploader")
@@ -268,8 +349,8 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
             with open(temp_gpx_path, "wb") as f:
                 f.write(uploaded_gpx_file.getbuffer())
             
-            duration_minutes, distance_km, start_date, sport = parse_gpx_data(temp_gpx_path)
-            
+            duration_minutes, distance_km, start_date, avg_speed, elev_pos, elev_neg = parse_gpx_data(temp_gpx_path)
+            sport = None
             if duration_minutes > 0:
                 st.session_state[f"{prefix}dauer_total_minutes_input"] = duration_minutes
                 st.success(f"Dauer aus GPX-Datei erkannt: {format_duration(duration_minutes)}.")
@@ -282,10 +363,19 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
             if sport:
                 st.session_state[f"{prefix}sportart_input"] = sport
                 st.success(f"Sportart aus GPX-Datei erkannt: {sport}.")
+            if avg_speed > 0.0:
+                st.session_state[f"{prefix}avg_speed_input"] = round(avg_speed, 2)
+                st.success(f"Durchschnittsgeschwindigkeit aus GPX-Datei erkannt: {round(avg_speed, 2)} km/h.")
+            if elev_pos > 0:
+                st.session_state[f"{prefix}elevation_gain_pos_input"] = elev_pos
+                st.success(f"Höhenmeter aufwärts aus GPX-Datei erkannt: {elev_pos} m.")
+            if elev_neg > 0:
+                st.session_state[f"{prefix}elevation_gain_neg_input"] = elev_neg
+                st.success(f"Höhenmeter abwärts aus GPX-Datei erkannt: {elev_neg} m.")
 
             if os.path.exists(temp_gpx_path):
                 os.remove(temp_gpx_path)
-            st.rerun()
+            st.rerun() # Wichtig, damit die neuen Werte in den Input-Feldern angezeigt werden
         else:
             st.warning("Bitte lade zuerst eine GPX-Datei hoch, um sie auszuwerten.")
 
@@ -296,7 +386,7 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
             with open(temp_fit_path, "wb") as f:
                 f.write(uploaded_fit_file.getbuffer())
             
-            duration_minutes, distance_km, start_date, sport, average_heart_rate = parse_fit_data(temp_fit_path)
+            duration_minutes, distance_km, start_date, sport, average_heart_rate, avg_speed, elev_pos, elev_neg = parse_fit_data(temp_fit_path)
             
             if duration_minutes > 0:
                 st.session_state[f"{prefix}dauer_total_minutes_input"] = duration_minutes
@@ -313,16 +403,25 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
             if average_heart_rate > 0:
                 st.session_state[f"{prefix}puls_input"] = average_heart_rate
                 st.success(f"Durchschnittlicher Puls aus FIT-Datei erkannt: {average_heart_rate} bpm.")
+            if avg_speed > 0.0:
+                st.session_state[f"{prefix}avg_speed_input"] = round(avg_speed, 2)
+                st.success(f"Durchschnittsgeschwindigkeit aus FIT-Datei erkannt: {round(avg_speed, 2)} km/h.")
+            if elev_pos > 0:
+                st.session_state[f"{prefix}elevation_gain_pos_input"] = elev_pos
+                st.success(f"Höhenmeter aufwärts aus FIT-Datei erkannt: {elev_pos} m.")
+            if elev_neg > 0:
+                st.session_state[f"{prefix}elevation_gain_neg_input"] = elev_neg
+                st.success(f"Höhenmeter abwärts aus FIT-Datei erkannt: {elev_neg} m.")
 
             if os.path.exists(temp_fit_path):
                 os.remove(temp_fit_path)
-            st.rerun()
+            st.rerun() # Wichtig, damit die neuen Werte in den Input-Feldern angezeigt werden
         else:
             st.warning("Bitte lade zuerst eine FIT-Datei hoch, um sie auszuwerten.")
 
     st.write("---")
 
-    # --- Das Formular selbst ---
+    # --- Das Formular selbst (Start des Formular-Kontexts) ---
     with st.form(key=f"{prefix}workout_form"):
         # Zeige aktuelle Dateipfade im Bearbeitungsmodus an
         if is_edit_mode:
@@ -333,8 +432,7 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
             st.markdown("---")
 
         # Verwende get() für die value-Parameter, um KeyError zu vermeiden, falls ein Wert mal fehlen sollte
-        # Workout Name ist jetzt das erste Eingabefeld
-        #name = st.text_input("Name des Workouts", placeholder="Test 1", value=st.session_state.get(f"{prefix}name_input", ""), key=f"{prefix}name_input_form")
+        name = st.text_input("Name des Workouts", placeholder="Test 1", value=st.session_state.get(f"{prefix}name_input", ""), key=f"{prefix}name_input_form")
         
         date = st.date_input("Datum", value=st.session_state.get(f"{prefix}date_input", datetime.now().date()), key=f"{prefix}date_input_form")
         sportart = st.text_input("Sportart", placeholder="z.B. Laufen, Radfahren, Schwimmen", value=st.session_state.get(f"{prefix}sportart_input", ""), key=f"{prefix}sportart_input_form")
@@ -358,18 +456,18 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
         # Berechne die Gesamtdauer in Minuten für die Speicherung
         dauer_to_save = (hours * 60) + minutes
 
-        # Aktualisiere den Session State für die Gesamtdauer in Minuten, falls sich die Stunden/Minuten ändern
-        if dauer_to_save != st.session_state.get(f"{prefix}dauer_total_minutes_input"):
-            st.session_state[f"{prefix}dauer_total_minutes_input"] = dauer_to_save
-            # st.rerun() # Ggf. rerun hier, wenn Änderungen sofort visuell werden sollen
-
         distanz = st.number_input("Distanz (in km)", min_value=0.0, step=0.1, value=st.session_state.get(f"{prefix}distanz_input", 0.0), key=f"{prefix}distanz_input_form")
         puls = st.number_input("Puls (in bpm)", min_value=0, step=1, value=st.session_state.get(f"{prefix}puls_input", 0), key=f"{prefix}puls_input_form")
         kalorien = st.number_input("Kalorien (in kcal)", min_value=0, step=1, value=st.session_state.get(f"{prefix}kalorien_input", 0), key=f"{prefix}kalorien_input_form")
+        
+        # NEUE FELDER
+        avg_speed = st.number_input("Durchschnittsgeschwindigkeit (km/h)", min_value=0.0, step=0.1, value=st.session_state.get(f"{prefix}avg_speed_input", 0.0), format="%.2f", key=f"{prefix}avg_speed_input_form")
+        elevation_gain_pos = st.number_input("Höhenmeter aufwärts (m)", min_value=0, step=1, value=st.session_state.get(f"{prefix}elevation_gain_pos_input", 0), key=f"{prefix}elevation_gain_pos_input_form")
+        elevation_gain_neg = st.number_input("Höhenmeter abwärts (m)", min_value=0, step=1, value=st.session_state.get(f"{prefix}elevation_gain_neg_input", 0), key=f"{prefix}elevation_gain_neg_input_form")
 
         st.write("---")
         
-        # Submit-Button für das gesamte Formular (ohne Key!)
+        # Submit-Button für das gesamte Formular
         submit_label = "Workout speichern" if is_edit_mode else "Workout hinzufügen"
         submitted = st.form_submit_button(submit_label)
 
@@ -381,7 +479,6 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
             elif not sportart:
                 st.error("Bitte gib eine Sportart ein.")
                 return None
-            # Verwende get() hier auch für die Werte, die von den Buttons kommen könnten
             elif st.session_state.get(f"{prefix}selected_antrengung") is None:
                 st.error("Bitte bewerte die Anstrengung des Trainings.")
                 return None
@@ -399,23 +496,25 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
                 "name": name,
                 "date": date.strftime("%Y-%m-%d"),
                 "sportart": sportart,
-                "dauer": dauer_to_save, # Speichere die Dauer immer noch in Minuten
+                "dauer": dauer_to_save, 
                 "distanz": distanz,
                 "puls": puls,
                 "kalorien": kalorien,
-                "anstrengung": st.session_state[f"{prefix}selected_antrengung"], # Diese sind immer gesetzt, da Buttons reruns
-                "star_rating": st.session_state[f"{prefix}selected_star_rating"], # diese
+                "anstrengung": st.session_state[f"{prefix}selected_antrengung"], 
+                "star_rating": st.session_state[f"{prefix}selected_star_rating"], 
                 "description": description,
                 "image": link_image,
                 "gpx_file": link_gpx,
                 "ekg_file": link_ekg,
-                "fit_file": link_fit
+                "fit_file": link_fit,
+                "avg_speed_kmh": avg_speed, 
+                "elevation_gain_pos": elevation_gain_pos, 
+                "elevation_gain_neg": elevation_gain_neg 
             }
-        # Cancel-Button (für den Bearbeitungsmodus), ebenfalls ohne Key!
+        # Cancel-Button (für den Bearbeitungsmodus)
         if is_edit_mode:
             cancel_submitted = st.form_submit_button("Abbrechen")
             if cancel_submitted:
                 return "CANCEL"
     
     return None
- 
