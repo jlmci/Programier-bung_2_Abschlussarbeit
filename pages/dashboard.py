@@ -10,7 +10,6 @@ import plotly.graph_objects as go
 import numpy as np
 
 # --- Konfiguration und Initialisierung (falls nicht bereits global in main.py) ---
-# Stellen Sie sicher, dass diese Pfade korrekt sind und von main.py oder über einen relativen Import verfügbar sind.
 DATA_DIR = "data"
 UPLOAD_DIR = "uploaded_files"
 
@@ -149,11 +148,15 @@ def get_trainings_for_current_user():
     return []
 
 def calculate_total_metrics(trainings):
-    """Berechnet die Gesamtdistanz, Gesamtzeit und maximale Herzfrequenz."""
+    """
+    Berechnet die Gesamtdistanz, Gesamtzeit, maximale Herzfrequenz
+    und die gesamten Höhenmeter (positiv und negativ).
+    """
     total_distance_km = 0.0
     total_duration_minutes = 0
-    max_hr_reported = 0
     max_hr_measured = 0 # Höchste HR aus FIT/EKG-Dateien
+    total_elevation_gain_pos = 0 # Gesamthöhenmeter aufwärts
+    total_elevation_gain_neg = 0 # Gesamthöhenmeter abwärts
 
     all_power_data = pd.DataFrame() # Für die akkumulierte Power Curve
 
@@ -172,13 +175,17 @@ def calculate_total_metrics(trainings):
         except (ValueError, TypeError):
             pass # Ignoriere ungültige Dauerwerte
 
-        # Angegebene HR
+        # Höhenmeter
         try:
-            hr_reported = int(training.get('puls', 0))
-            if hr_reported > max_hr_reported:
-                max_hr_reported = hr_reported
+            # Annahme: 'elevation_gain_pos' und 'elevation_gain_neg' sind bereits in der DB gespeichert
+            # durch das Parsen von GPX/FIT in add_workout.py oder Trainingsliste.py.
+            # Falls sie fehlen oder ungültig sind, werden sie als 0 behandelt.
+            pos_elevation = int(training.get('elevation_gain_pos', 0))
+            neg_elevation = int(training.get('elevation_gain_neg', 0))
+            total_elevation_gain_pos += pos_elevation
+            total_elevation_gain_neg += neg_elevation
         except (ValueError, TypeError):
-            pass # Ignoriere ungültige Puls-Werte
+            pass # Ignoriere ungültige Höhenmeterwerte
 
         # FIT-Dateien für gemessene HR und Power
         fit_file_path = training.get('fit_file')
@@ -193,10 +200,7 @@ def calculate_total_metrics(trainings):
                 
                 # Power Daten für akkumulierte Power Curve
                 if 'power' in fit_df.columns and fit_df['power'].dropna().any():
-                    # Nur die Spalten "time" und "power" sind für die Power Curve relevant
-                    # Füge eine Spalte für die absolute Zeit hinzu, um später alle Daten zusammenzuführen
                     if 'time' in fit_df.columns and pd.api.types.is_datetime64_any_dtype(fit_df['time']):
-                        # Setze die "time" Spalte als Index, um sie später zu mergen
                         fit_df_for_power = fit_df[['time', 'power']].set_index('time')
                         all_power_data = pd.concat([all_power_data, fit_df_for_power]).sort_index()
                     else:
@@ -205,7 +209,7 @@ def calculate_total_metrics(trainings):
     # Bereinige all_power_data: Entferne Duplikate im Index (falls Zeitstempel identisch sind)
     all_power_data = all_power_data[~all_power_data.index.duplicated(keep='first')]
 
-    return total_distance_km, total_duration_minutes, max_hr_reported, max_hr_measured, all_power_data
+    return total_distance_km, total_duration_minutes, max_hr_measured, all_power_data, total_elevation_gain_pos, total_elevation_gain_neg
 
 def create_accumulated_power_curve(all_power_data_df):
     """
@@ -215,20 +219,10 @@ def create_accumulated_power_curve(all_power_data_df):
     if all_power_data_df.empty or 'power' not in all_power_data_df.columns or all_power_data_df['power'].isnull().all():
         return pd.DataFrame() # Leeren DataFrame zurückgeben, wenn keine Power-Daten
 
-    # Stellen Sie sicher, dass der Index (Zeit) nicht zu großen Lücken führt, die das Rolling behindern
-    # Eine einfache Lösung ist, nur die Power-Werte zu verwenden und ihren Index zu ignorieren
-    # für die Berechnung der besten Anstrengungen über die verschiedenen Fenstergrößen.
-    # Wichtig: Rolling-Fenster benötigen eine zusammenhängende Sequenz. Wenn wir alle Daten verketten,
-    # behandeln wir sie als eine lange Sequenz von Power-Werten.
-    
-    # Standard-Fenstergrößen für die Power-Kurve in Sekunden
-    # Annahme: FIT-Daten haben etwa 1 Sekunde Intervalle, daher sind 'window' = Sekunden
     window_sizes = [1, 5, 10, 30, 60, 120, 300, 600, 900, 1200, 1800, 3600] 
     
     accumulated_best_efforts = {}
 
-    # Konvertiere den Index in Sekunden seit Beginn des gesamten Datensatzes, um Rolling zu ermöglichen
-    # oder einfach die Power-Werte als Liste behandeln
     power_values = all_power_data_df['power'].dropna().reset_index(drop=True)
     
     if power_values.empty:
@@ -239,10 +233,8 @@ def create_accumulated_power_curve(all_power_data_df):
             accumulated_best_efforts[size_seconds] = None # Nicht genug Daten für dieses Fenster
             continue
 
-        # Berechnung des gleitenden Durchschnitts für die aktuelle Fenstergröße
         rolling_means = power_values.rolling(window=size_seconds).mean()
         
-        # Finde den maximalen Wert in den gleitenden Durchschnitten
         max_power_for_window = rolling_means.max()
         
         if not pd.isna(max_power_for_window):
@@ -268,7 +260,7 @@ def format_time_for_power_curve(s):
     else:
         return f"{s//3600}h"
 
-def plot_power_curve(power_curve_df):
+def plot_power_curve(power_curve_df): # <-- This function definition
     """Plottet die Power-Kurve mit Plotly."""
     if power_curve_df.empty:
         return None
@@ -297,8 +289,12 @@ def main():
     initialize_directories()
 
     if "person_doc_id" not in st.session_state:
-        st.info("Bitte warten")
+        st.info("Bitte warte")
         return
+
+    # Initialisiere den Session State für die Anzeigeart der Höhenmeter
+    if 'show_elevation_type' not in st.session_state:
+        st.session_state.show_elevation_type = 'pos' # 'pos' für aufwärts, 'neg' für abwärts
 
     st.subheader("Übersicht der Trainingsdaten")
 
@@ -306,9 +302,28 @@ def main():
 
     if not trainings_for_user:
         st.info("Es sind noch keine Trainingsdaten für diese Person verfügbar. Füge Trainings hinzu!")
+        if st.button("Trainings hinzufügen"):
+            st.switch_page("pages/add workout.py")
         return
 
-    total_distance, total_duration, max_hr_reported, max_hr_measured, all_power_data = calculate_total_metrics(trainings_for_user)
+    # Cache die Ergebnisse von calculate_total_metrics mit st.cache_data, da sich diese nur bei neuen Trainings ändern.
+    # WICHTIG: Wenn sich die Trainingsdaten in der DB ändern, musst du den Cache leeren (z.B. durch eine Schaltfläche oder Neustart der App)
+    @st.cache_data(show_spinner="Berechne Metriken...")
+    def get_cached_total_metrics(trainings_list_for_hash):
+        # Um st.cache_data zu nutzen, benötigen wir einen hashbaren Input.
+        # Wir können z.B. die doc_ids der Trainings als Tupel übergeben.
+        # Oder einfach die Rohdaten der Trainings, falls sie nicht zu groß sind.
+        # Hier nutzen wir eine Liste der Trainings-Dokumente.
+        # Wenn sich der Inhalt eines Trainingsdokuments ändert, muss der Cache invalidiert werden.
+        return calculate_total_metrics(trainings_list_for_hash)
+
+    # Erstelle einen hashbaren "Fingerabdruck" der Trainings, um den Cache zu steuern
+    # Hier verwenden wir die Liste der doc_ids, da sich der Inhalt der Trainings ändert,
+    # aber die IDs bleiben gleich, es sei denn, ein Training wird hinzugefügt/gelöscht.
+    # Für eine robustere Caching-Strategie müsste man ggf. einen Hash über alle relevanten Trainingsdaten bilden.
+    trainings_ids_for_cache = tuple(sorted([t.doc_id for t in trainings_for_user]))
+
+    total_distance, total_duration, max_hr_measured, all_power_data, total_elevation_gain_pos, total_elevation_gain_neg = get_cached_total_metrics(trainings_for_user)
 
     col1, col2, col3 = st.columns(3)
 
@@ -317,29 +332,63 @@ def main():
     with col2:
         st.metric(label="Gesamtzeit", value=format_time_duration(total_duration))
     with col3:
-        st.metric(label="Max. Herzfrequenz (Angabe)", value=f"{max_hr_reported} bpm")
+        person_doc_id = int(st.session_state["person_doc_id"])
+        person_data = dp.get(doc_id=person_doc_id)
+        st.session_state.max_hr_reported_cached = person_data.get('maximalpuls')
+        
+        st.metric(label="Max. Herzfrequenz (Angabe)", value=f"{st.session_state.max_hr_reported_cached} bpm")
     
     # Zusätzliche Metrik für die höchste gemessene Herzfrequenz
     st.markdown("---")
     st.metric(label="Max. Herzfrequenz (Gemessen aus Dateien)", value=f"{max_hr_measured} bpm" if max_hr_measured > 0 else "N/A")
 
+    st.markdown("---")
+    ### Gesamthöhenmeter
+
+    # Funktion zum Umschalten der Höhenmeter-Anzeigeart
+    def toggle_elevation_type():
+        st.session_state.show_elevation_type = 'neg' if st.session_state.show_elevation_type == 'pos' else 'pos'
+
+    # Spaltenlayout für Metrik und Button
+    metric_col, button_col = st.columns([0.7, 0.3])
+
+    with metric_col:
+        if st.session_state.show_elevation_type == 'pos':
+            st.metric(label="Höhenmeter aufwärts", value=f"{total_elevation_gain_pos} m")
+        else:
+            st.metric(label="Höhenmeter abwärts", value=f"{total_elevation_gain_neg} m")
+    
+    with button_col:
+        st.write("") # Platzhalter für vertikale Ausrichtung
+        st.write("") # Platzhalter für vertikale Ausrichtung
+        if st.session_state.show_elevation_type == 'pos':
+            st.button("⬇️ Abwärts anzeigen", on_click=toggle_elevation_type, key="toggle_elevation_down", help="Klicken, um die gesamten Höhenmeter abwärts anzuzeigen.")
+        else:
+            st.button("⬆️ Aufwärts anzeigen", on_click=toggle_elevation_type, key="toggle_elevation_up", help="Klicken, um die gesamten Höhenmeter aufwärts anzuzeigen.")
 
     st.markdown("---")
-    st.subheader("Akkumulierte Power Curve (aus allen FIT-Dateien)")
+    ### Akkumulierte Power Curve (aus allen FIT-Dateien)
 
-    accumulated_pc_df = create_accumulated_power_curve(all_power_data)
+    # Auch hier den Cache nutzen, da die Power Curve eine aufwändige Berechnung sein kann
+    @st.cache_data(show_spinner="Erstelle Power Curve...")
+    def get_cached_power_curve(all_power_data_df_for_hash):
+        return create_accumulated_power_curve(all_power_data_df_for_hash)
+
+    accumulated_pc_df = get_cached_power_curve(all_power_data) # all_power_data ist bereits das Ergebnis aus dem ersten Cache
+
     if not accumulated_pc_df.empty:
+        # plot_power_curve ist nicht rechenintensiv, daher muss es nicht gecached werden
         fig_power_curve = plot_power_curve(accumulated_pc_df)
         st.plotly_chart(fig_power_curve, use_container_width=True)
     else:
         st.info("Nicht genügend Leistungsdaten in den FIT-Dateien gefunden, um eine Power Curve zu erstellen.")
 
     st.markdown("---")
-    st.subheader("Dummies für zukünftige Metriken")
+    ### Weitere Metriken
 
     col_dummy1, col_dummy2 = st.columns(2)
     with col_dummy1:
-        st.metric(label="Höhenmeter Gesamt (Dummy)", value="0 m") # Platzhalter
+        st.metric(label="Durchschnittliche Trittfrequenz (Dummy)", value="N/A") # Platzhalter
     with col_dummy2:
         st.metric(label="Herzfrequenzvariabilität (Dummy)", value="N/A") # Platzhalter
 
