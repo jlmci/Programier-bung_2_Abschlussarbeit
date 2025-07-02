@@ -9,6 +9,7 @@ db = TinyDB('dbperson.json')
 Person = Query()
 
 def person_anschauen_page():
+    '''Das ist quasi die main() datei des Personen anschauens'''
     st.title("Ansicht wechseln")
 
     # Only allow admins to access this page
