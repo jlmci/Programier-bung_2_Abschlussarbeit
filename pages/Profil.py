@@ -9,19 +9,21 @@ import yaml
 from yaml.loader import SafeLoader
 from yaml.dumper import Dumper
 
-# --- Path setup (assuming this is correct for your project) ---
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir)
+
+#from Module.utils import normalize_path_slashes
+#from Module.Personenklasse import Person
+
 
 from utils import normalize_path_slashes
 # --- Import your Person class ---
 from Person.Personenklasse import Person
 
-# --- Initialize TinyDB ---
+
 db = TinyDB('dbperson.json')
 
-# --- YAML Configuration Loading (similar to main.py) ---
 try:
     with open('config.yaml') as file:
         config = yaml.load(file, Loader=SafeLoader)
@@ -35,8 +37,19 @@ except yaml.YAMLError as exc:
     st.stop()
 
 
-# --- Function to save config.yaml ---
+
 def save_config(config_data):
+    """
+    Speichert die gegebenen Konfigurationsdaten in der 'config.yaml'-Datei.
+
+    Args:
+        config_data (dict): Ein Dictionary, das die zu speichernden Konfigurationsdaten enthält.
+                            Dieses Dictionary wird im YAML-Format in die Datei geschrieben.
+
+    Returns:
+        bool: True, wenn die Konfigurationsdaten erfolgreich gespeichert wurden.
+              False, wenn ein Fehler beim Speichern aufgetreten ist.
+    """
     try:
         with open('config.yaml', 'w') as file:
             yaml.dump(config_data, file, default_flow_style=False, Dumper=Dumper)
@@ -45,16 +58,17 @@ def save_config(config_data):
         st.error(f"Fehler beim Speichern der 'config.yaml' Datei: {e}")
         return False
 
+
+
 # --- Streamlit App starts here ---
 
-# Session State for the current user's ID
 if "person_doc_id" not in st.session_state or st.session_state["person_doc_id"] is None:
     st.error("Bitte warten")
     st.stop()
 
 st.session_state.current_user_id = str(st.session_state["person_doc_id"])
 
-# --- Retrieve User Data ---
+
 try:
     user_data = db.get(doc_id=int(st.session_state.current_user_id))
     if user_data is None:
@@ -100,11 +114,9 @@ with bild_col:
         with open(new_picture_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         
-        Nutzer.picture_path = normalize_path_slashes(new_picture_path) # <--- GEÄNDERT
+        Nutzer.picture_path = normalize_path_slashes(new_picture_path) 
         
-        # WICHTIG: Du musst diesen neuen Pfad auch in der TinyDB aktualisieren!
-        # Der aktuelle Code aktualisiert nur das Nutzer-Objekt im Speicher,
-        # aber nicht die Datenbank selbst. Hier ist, wie du das tun würdest:
+        
         db.update({"picture_path": Nutzer.picture_path}, doc_ids=[int(st.session_state.current_user_id)]) # <--- NEU: Füge diese Zeile hinzu!
         
         st.success("Bild erfolgreich hochgeladen und gesetzt!")
@@ -117,7 +129,6 @@ with personendaten_col:
     unsafe_allow_html=True
 )
 
-    # Find the current user's entry in USER_CREDENTIALS by person_doc_id
     current_username_in_config = None
     user_config_entry = None
     for uname, udata in USER_CREDENTIALS.items():
@@ -129,18 +140,15 @@ with personendaten_col:
     st.markdown(f"**Benutzername:** `{current_username_in_config}`" if current_username_in_config else "Kein Benutzername gefunden.")
     st.markdown(f"**ID:** {st.session_state.current_user_id}")
 
-    # Platzhalter für den Admin-Button (wird später befüllt)
     
     
     # Initialisiere admin_mode
     admin_mode = st.session_state.get("toggle_admin_edit_mode", False)
 
-    # --- Conditional display for User vs. Admin View of General Person Data ---
     if admin_mode:
-        # Admin Edit View
         st.markdown("---")
         
-        with st.container(border=True): # Container for border
+        with st.container(border=True): 
             st.write("Admin-Modus Nutzerdaten ändern.")
             new_firstname = st.text_input("Vorname:", Nutzer.firstname, key="admin_firstname")
             new_lastname = st.text_input("Nachname:", Nutzer.lastname, key="admin_lastname")
@@ -198,7 +206,7 @@ with personendaten_col:
         st.markdown(f"🎂  {Nutzer.age} ({Nutzer.date_of_birth})")
         st.markdown(f"🏃‍♂️  {len(Nutzer.ekg_test_ids)} trainings absolviert")
 
-    with st.container(border=True): # Container for border
+    with st.container(border=True): 
         st.write("Maximalpuls anpassen:")
         current_maximalpuls = Nutzer.maximal_hr
         min_puls = 100
@@ -245,7 +253,7 @@ with daten_ändern:
             initial_password_value = ""
             if st.session_state.get("admin", False):
                 initial_password_value = user_config_entry.get('password', '')
-                #st.info("Das aktuelle Passwort wurde automatisch eingefügt, weil du Admin bist.")
+                
             
             confirm_current_password = st.text_input(
                 "Identität bestätigen  \n Aktuelles Passwort:",
