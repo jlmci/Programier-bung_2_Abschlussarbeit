@@ -3,25 +3,19 @@ import pandas as pd
 from datetime import datetime, timedelta
 import fitparse
 import os
-import numpy as np
+from tinydb import TinyDB, Query
 import plotly.express as px
 import plotly.graph_objects as go
-import base64 # Importiere base64
-import io # Importiere io für BytesIO
+import numpy as np
 
-from tinydb import TinyDB, Query
+# --- Konfiguration und Initialisierung (falls nicht bereits global in main.py) ---
+DATA_DIR = "data"
+UPLOAD_DIR = "uploaded_files"
 
-# Stelle sicher, dass das Verzeichnis mit hilfsfunktionenedittraining.py im sys.path ist
-script_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(script_dir)
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-
-from hilfsfunktionenedittraining import parse_fit_data # Importiere die aktualisierte Funktion
-
-# --- Konfiguration und Initialisierung ---
-# DATA_DIR, UPLOAD_DIR und initialize_directories werden entfernt,
-# da Dateien nicht mehr auf dem Dateisystem gespeichert werden.
+def initialize_directories():
+    """Stellt sicher, dass notwendige Verzeichnisse existieren."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # --- Datenbank-Initialisierung ---
 db = TinyDB('dbtests.json')
@@ -31,194 +25,355 @@ Test = Query()
 
 # --- Hilfsfunktionen (aus Trainingsliste.py übernommen oder angepasst) ---
 
-def load_fit_data(fit_base64_string):
+def load_fit_data(fit_filepath):
     """
-    Lädt und parst eine FIT-Datei aus einem Base64-String und extrahiert relevante Daten.
+    Lädt und parst eine FIT-Datei und extrahiert relevante Daten.
     Handhabt fehlende Felder, indem sie None setzt.
     Gibt ein Pandas DataFrame mit Zeit, Herzfrequenz, Leistung, Lat/Lon usw. zurück oder None bei Fehler.
     """
-    if not fit_base64_string:
+    abs_filepath = fit_filepath
+    if not abs_filepath or not os.path.exists(abs_filepath):
         return None
     try:
-        fit_bytes = base64.b64decode(fit_base64_string)
-        fitfile = FitFile(io.BytesIO(fit_bytes))
+        fitfile = fitparse.FitFile(abs_filepath)
 
-        data = []
+        time_data = []
+        velocity_data = []
+        heartrate_data = []
+        distance_data = []
+        cadence_data = []
+        power_data = []
+        latitude_data = []
+        longitude_data = []
+
         for record in fitfile.get_messages('record'):
-            row = {'timestamp': record.get_value('timestamp')}
-            # Fügen Sie alle gewünschten Felder hinzu
-            for field_name in ['heart_rate', 'power', 'speed', 'distance', 'altitude', 'cadence']:
-                row[field_name] = record.get_value(field_name)
-            data.append(row)
-        
-        if data:
-            df = pd.DataFrame(data)
-            # Konvertiere Zeitstempel in datetime-Objekte und berechne Dauer in Sekunden
-            if 'timestamp' in df.columns and pd.api.types.is_datetime64_any_dtype(df['timestamp']):
-                df['duration_seconds'] = (df['timestamp'] - df['timestamp'].min()).dt.total_seconds()
-            return df
+            record_values = {data.name: data.value for data in record}
+
+            timestamp = record_values.get("timestamp")
+            speed_val = record_values.get("speed")
+            hr_val = record_values.get("heart_rate")
+            dist_val = record_values.get("distance")
+            cadence_val = record_values.get("cadence")
+            power_val = record_values.get("power")
+            
+            lat_semicircles = record_values.get("position_lat")
+            lon_semicircles = record_values.get("position_long")
+
+            lat_val = lat_semicircles * (180.0 / 2**31) if lat_semicircles is not None else None
+            lon_val = lon_semicircles * (180.0 / 2**31) if lon_semicircles is not None else None
+
+            time_data.append(timestamp)
+            velocity_data.append(speed_val)
+            heartrate_data.append(hr_val)
+            distance_data.append(dist_val)
+            cadence_data.append(cadence_val)
+            power_data.append(power_val)
+            latitude_data.append(lat_val)
+            longitude_data.append(lon_val)
+
+        df = pd.DataFrame({
+            "time": time_data,
+            "velocity": velocity_data,
+            "heart_rate": heartrate_data,
+            "distance": distance_data,
+            "cadence": cadence_data,
+            "power": power_data,
+            "latitude": latitude_data,
+            "longitude": longitude_data
+        })
+        # Füllen Sie NaN-Werte vor und zurück auf
+        df = df.fillna(method='ffill').fillna(method='bfill')
+        return df
+
+    except FileNotFoundError:
         return None
-    except Exception as e:
-        st.error(f"Fehler beim Laden der FIT-Daten: {e}")
+    except fitparse.FitParseError:
+        return None
+    except Exception:
         return None
 
-@st.cache_data(show_spinner="Lade Trainingsdaten...")
-def get_trainings_for_dashboard(person_doc_id):
-    """
-    Lädt alle relevanten Trainingsdaten für das Dashboard.
-    """
-    person_data = dp.get(doc_id=int(person_doc_id))
+def find_best_effort(df, window_size, power_col="power"):
+    """Findet den besten Durchschnittswert für eine gegebene Fenstergröße."""
+    if df.empty or power_col not in df.columns or df[power_col].isnull().all():
+        return None
+    
+    if window_size > len(df): # Handle cases where window_size exceeds df length
+        return None
+    max_value = df[power_col].rolling(window=window_size).mean()
+    # Check if max_value is empty or all NaN before taking max
+    return int(max_value.max()) if not max_value.empty and not pd.isna(max_value.max()) else None
+
+def format_time_duration(total_minutes):
+    """Formatiert eine Gesamtdauer in Minuten in eine lesbare Zeichenkette (Tage, Stunden, Minuten)."""
+    if total_minutes is None:
+        return "N/A"
+    
+    total_seconds = total_minutes * 60
+    
+    days = int(total_seconds // (24 * 3600))
+    total_seconds %= (24 * 3600)
+    hours = int(total_seconds // 3600)
+    total_seconds %= 3600
+    minutes = int(total_seconds // 60)
+    seconds = int(total_seconds % 60)
+
+    parts = []
+    if days > 0:
+        parts.append(f"{days} Tag{'e' if days > 1 else ''}")
+    if hours > 0:
+        parts.append(f"{hours} Std.")
+    if minutes > 0:
+        parts.append(f"{minutes} Min.")
+    if seconds > 0 and not parts: # Only show seconds if no larger units
+        parts.append(f"{seconds} Sek.")
+    
+    return ", ".join(parts) if parts else "0 Min."
+
+# --- Hauptfunktionen für das Dashboard ---
+
+def get_trainings_for_current_user():
+    """Lädt die Trainings für die aktuell ausgewählte Person aus der TinyDB."""
+    if "person_doc_id" not in st.session_state:
+        return []
+    
+    person_doc_id = int(st.session_state["person_doc_id"])
+    person_data = dp.get(doc_id=person_doc_id)
+
     if person_data and 'ekg_tests' in person_data:
         ekg_test_ids = person_data['ekg_tests']
         all_trainings = db.all()
-        user_trainings = [t for t in all_trainings if hasattr(t, 'doc_id') and t.doc_id in ekg_test_ids]
+        user_trainings = [t for t in all_trainings if t.doc_id in ekg_test_ids]
         return user_trainings
     return []
 
-def calculate_accumulated_power_curve(all_power_data_df):
+def calculate_total_metrics(trainings):
     """
-    Berechnet die kumulierte Power Curve aus einem DataFrame mit Power-Daten.
+    Berechnet die Gesamtdistanz, Gesamtzeit, maximale Herzfrequenz
+    und die gesamten Höhenmeter (positiv und negativ).
     """
-    if all_power_data_df.empty:
+    total_distance_km = 0.0
+    total_duration_minutes = 0
+    max_hr_measured = 0 # Höchste HR aus FIT/EKG-Dateien
+    total_elevation_gain_pos = 0 # Gesamthöhenmeter aufwärts
+    total_elevation_gain_neg = 0 # Gesamthöhenmeter abwärts
+
+    all_power_data = pd.DataFrame() # Für die akkumulierte Power Curve
+
+    for training in trainings:
+        # Distanz
+        try:
+            distance = float(training.get('distanz', 0))
+            total_distance_km += distance
+        except (ValueError, TypeError):
+            pass # Ignoriere ungültige Distanzwerte
+
+        # Dauer
+        try:
+            duration = int(training.get('dauer', 0)) # Dauer in Minuten
+            total_duration_minutes += duration
+        except (ValueError, TypeError):
+            pass # Ignoriere ungültige Dauerwerte
+
+        # Höhenmeter
+        try:
+            # Annahme: 'elevation_gain_pos' und 'elevation_gain_neg' sind bereits in der DB gespeichert
+            # durch das Parsen von GPX/FIT in add_workout.py oder Trainingsliste.py.
+            # Falls sie fehlen oder ungültig sind, werden sie als 0 behandelt.
+            pos_elevation = int(training.get('elevation_gain_pos', 0))
+            neg_elevation = int(training.get('elevation_gain_neg', 0))
+            total_elevation_gain_pos += pos_elevation
+            total_elevation_gain_neg += neg_elevation
+        except (ValueError, TypeError):
+            pass # Ignoriere ungültige Höhenmeterwerte
+
+        # FIT-Dateien für gemessene HR und Power
+        fit_file_path = training.get('fit_file')
+        if fit_file_path and os.path.exists(fit_file_path):
+            fit_df = load_fit_data(fit_file_path)
+            if fit_df is not None and not fit_df.empty:
+                # Max gemessene HR
+                if 'heart_rate' in fit_df.columns and fit_df['heart_rate'].dropna().any():
+                    current_max_hr_measured = fit_df['heart_rate'].max()
+                    if current_max_hr_measured > max_hr_measured:
+                        max_hr_measured = int(current_max_hr_measured)
+                
+                # Power Daten für akkumulierte Power Curve
+                if 'power' in fit_df.columns and fit_df['power'].dropna().any():
+                    if 'time' in fit_df.columns and pd.api.types.is_datetime64_any_dtype(fit_df['time']):
+                        fit_df_for_power = fit_df[['time', 'power']].set_index('time')
+                        all_power_data = pd.concat([all_power_data, fit_df_for_power]).sort_index()
+                    else:
+                        st.warning(f"FIT-Datei '{os.path.basename(fit_file_path)}' hat keine gültige 'time'-Spalte für die Power Curve.")
+
+    # Bereinige all_power_data: Entferne Duplikate im Index (falls Zeitstempel identisch sind)
+    all_power_data = all_power_data[~all_power_data.index.duplicated(keep='first')]
+
+    return total_distance_km, total_duration_minutes, max_hr_measured, all_power_data, total_elevation_gain_pos, total_elevation_gain_neg
+
+def create_accumulated_power_curve(all_power_data_df):
+    """
+    Erstellt eine akkumulierte Power Curve aus allen vorhandenen Power-Daten.
+    Dazu wird der höchste Power-Wert für jede Fenstergröße über alle Trainings hinweg gefunden.
+    """
+    if all_power_data_df.empty or 'power' not in all_power_data_df.columns or all_power_data_df['power'].isnull().all():
+        return pd.DataFrame() # Leeren DataFrame zurückgeben, wenn keine Power-Daten
+
+    window_sizes = [1, 5, 10, 30, 60, 120, 300, 600, 900, 1200, 1800, 3600] 
+    
+    accumulated_best_efforts = {}
+
+    power_values = all_power_data_df['power'].dropna().reset_index(drop=True)
+    
+    if power_values.empty:
         return pd.DataFrame()
 
-    # Sicherstellen, dass 'power' numerisch ist
-    all_power_data_df['power'] = pd.to_numeric(all_power_data_df['power'], errors='coerce').fillna(0)
+    for size_seconds in window_sizes:
+        if size_seconds > len(power_values):
+            accumulated_best_efforts[size_seconds] = None # Nicht genug Daten für dieses Fenster
+            continue
 
-    # Sortiere nach Leistung absteigend, um die höchsten Leistungen für jede Dauer zu finden
-    all_power_data_df = all_power_data_df.sort_values(by='power', ascending=False)
+        rolling_means = power_values.rolling(window=size_seconds).mean()
+        
+        max_power_for_window = rolling_means.max()
+        
+        if not pd.isna(max_power_for_window):
+            accumulated_best_efforts[size_seconds] = int(max_power_for_window)
+        else:
+            accumulated_best_efforts[size_seconds] = None
 
-    # Berechne die rollierende Durchschnittsleistung für verschiedene Intervalle
-    durations = [1, 5, 10, 30, 60, 120, 300, 600, 1200, 1800, 3600] # Sekunden
-    power_curve_data = []
-
-    for duration in durations:
-        # Berechne den rollierenden Durchschnitt nur, wenn genügend Datenpunkte vorhanden sind
-        if len(all_power_data_df) >= duration:
-            rolling_avg_power = all_power_data_df['power'].rolling(window=duration, min_periods=1).mean().max()
-            power_curve_data.append({'duration_seconds': duration, 'max_avg_power': rolling_avg_power})
+    power_curve_df = pd.DataFrame.from_dict(accumulated_best_efforts, orient='index', columns=['BestEffort'])
+    power_curve_df = power_curve_df.dropna() # Entferne Fenstergrößen ohne Daten
     
-    return pd.DataFrame(power_curve_data)
-
-def plot_power_curve(power_curve_df):
-    """
-    Plottet die Power Curve.
-    """
     if power_curve_df.empty:
-        return go.Figure()
+        return pd.DataFrame()
 
-    fig = px.line(power_curve_df, 
-                  x='duration_seconds', 
-                  y='max_avg_power', 
-                  log_x=True, # Logarithmische Skala für Dauer
-                  title='Akkumulierte Power Curve',
-                  labels={'duration_seconds': 'Dauer (Sekunden, log-Skala)', 'max_avg_power': 'Maximale Durchschnittsleistung (Watt)'},
-                  markers=True)
-    fig.update_layout(hovermode="x unified")
+    power_curve_df["formated_Time"] = power_curve_df.index.map(format_time_for_power_curve)
+    return power_curve_df
+
+def format_time_for_power_curve(s):
+    """Formatiert Sekunden in lesbare Zeitangaben (s, m, h) für die Power Curve."""
+    if s < 60:
+        return f"{s}s"
+    elif s < 3600:
+        return f"{s//60}m"
+    else:
+        return f"{s//3600}h"
+
+def plot_power_curve(power_curve_df): # <-- This function definition
+    """Plottet die Power-Kurve mit Plotly."""
+    if power_curve_df.empty:
+        return None
+
+    fig = px.line(
+        power_curve_df,
+        x="formated_Time",
+        y="BestEffort",
+        title="Akkumulierte Power Curve"
+    )
+
+    fig.update_layout(
+        xaxis_title="Zeitfenster",
+        yaxis_title="Leistung (Watt)",
+        template="plotly_white",
+        hovermode="x unified"
+    )
     return fig
 
-# --- Hauptanwendung ---
+# --- Streamlit Dashboard Layout ---
+
 def main():
-    st.title("Dashboard 📊")
+    st.title("Dein Trainings-Dashboard 📊")
     st.markdown("---")
 
-    # initialize_directories() wird nicht mehr benötigt
+    initialize_directories()
 
-    current_user_id = st.session_state.get("person_doc_id")
-    current_user_name = st.session_state.get("profile_to_see_name", st.session_state.get("name", "Dein"))
-
-    if not current_user_id:
-        st.info("Bitte melden Sie sich an, um das Dashboard anzuzeigen.")
+    if "person_doc_id" not in st.session_state:
+        st.info("Bitte warte")
         return
 
-    st.markdown(f"### {current_user_name} Trainingsübersicht")
+    # Initialisiere den Session State für die Anzeigeart der Höhenmeter
+    if 'show_elevation_type' not in st.session_state:
+        st.session_state.show_elevation_type = 'pos' # 'pos' für aufwärts, 'neg' für abwärts
 
-    trainings = get_trainings_for_dashboard(current_user_id)
+    st.subheader("Übersicht der Trainingsdaten")
 
-    if not trainings:
-        st.info("Noch keine Trainingsdaten zum Anzeigen im Dashboard vorhanden.")
+    trainings_for_user = get_trainings_for_current_user()
+
+    if not trainings_for_user:
+        st.info("Es sind noch keine Trainingsdaten für diese Person verfügbar. Füge Trainings hinzu!")
+        if st.button("Trainings hinzufügen"):
+            st.switch_page("pages/add workout.py")
         return
 
-    # Konvertiere Trainingsdaten in ein DataFrame für einfache Analyse
-    # Filtern Sie die Base64-Felder heraus, da sie nicht direkt in den DataFrame gehören
-    filtered_trainings = []
-    for t in trainings:
-        temp_t = {k: v for k, v in t.items() if k not in ['image', 'gpx_file', 'ekg_file', 'fit_file']}
-        filtered_trainings.append(temp_t)
+    # Cache die Ergebnisse von calculate_total_metrics mit st.cache_data, da sich diese nur bei neuen Trainings ändern.
+    # WICHTIG: Wenn sich die Trainingsdaten in der DB ändern, musst du den Cache leeren (z.B. durch eine Schaltfläche oder Neustart der App)
+    @st.cache_data(show_spinner="Berechne Metriken...")
+    def get_cached_total_metrics(trainings_list_for_hash):
+        # Um st.cache_data zu nutzen, benötigen wir einen hashbaren Input.
+        # Wir können z.B. die doc_ids der Trainings als Tupel übergeben.
+        # Oder einfach die Rohdaten der Trainings, falls sie nicht zu groß sind.
+        # Hier nutzen wir eine Liste der Trainings-Dokumente.
+        # Wenn sich der Inhalt eines Trainingsdokuments ändert, muss der Cache invalidiert werden.
+        return calculate_total_metrics(trainings_list_for_hash)
 
-    df_trainings = pd.DataFrame(filtered_trainings)
-    df_trainings['date'] = pd.to_datetime(df_trainings['date'])
+    # Erstelle einen hashbaren "Fingerabdruck" der Trainings, um den Cache zu steuern
+    # Hier verwenden wir die Liste der doc_ids, da sich der Inhalt der Trainings ändert,
+    # aber die IDs bleiben gleich, es sei denn, ein Training wird hinzugefügt/gelöscht.
+    # Für eine robustere Caching-Strategie müsste man ggf. einen Hash über alle relevanten Trainingsdaten bilden.
+    trainings_ids_for_cache = tuple(sorted([t.doc_id for t in trainings_for_user]))
 
-    st.subheader("Trainingsstatistiken")
+    total_distance, total_duration, max_hr_measured, all_power_data, total_elevation_gain_pos, total_elevation_gain_neg = get_cached_total_metrics(trainings_for_user)
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        total_distance = df_trainings['distanz'].sum()
         st.metric(label="Gesamtdistanz", value=f"{total_distance:.2f} km")
     with col2:
-        total_duration_minutes = df_trainings['dauer'].sum()
-        st.metric(label="Gesamtdauer", value=format_duration(total_duration_minutes))
+        st.metric(label="Gesamtzeit", value=format_time_duration(total_duration))
     with col3:
-        avg_pulse = df_trainings['puls'].mean()
-        st.metric(label="Durchschnittlicher Puls", value=f"{avg_pulse:.0f} bpm")
-
-    st.markdown("---")
-
-    st.subheader("Distanzentwicklung über Zeit")
-    fig_distance = px.line(df_trainings.sort_values('date'), x='date', y='distanz', title='Distanz pro Training')
-    st.plotly_chart(fig_distance, use_container_width=True)
-
-    st.subheader("Verteilung der Sportarten")
-    sportart_counts = df_trainings['sportart'].value_counts().reset_index()
-    sportart_counts.columns = ['Sportart', 'Anzahl']
-    fig_sportart = px.pie(sportart_counts, values='Anzahl', names='Sportart', title='Verteilung der Sportarten')
-    st.plotly_chart(fig_sportart, use_container_width=True)
-
-    st.subheader("Anstrengung und Bewertung")
-    col_anstrengung, col_rating = st.columns(2)
-    with col_anstrengung:
-        anstrengung_counts = df_trainings['anstrengung'].value_counts().reset_index()
-        anstrengung_counts.columns = ['Anstrengung', 'Anzahl']
-        fig_anstrengung = px.bar(anstrengung_counts, x='Anstrengung', y='Anzahl', title='Verteilung der Anstrengung')
-        st.plotly_chart(fig_anstrengung, use_container_width=True)
-    with col_rating:
-        star_rating_counts = df_trainings['star_rating'].value_counts().sort_index().reset_index()
-        star_rating_counts.columns = ['Sterne', 'Anzahl']
-        fig_rating = px.bar(star_rating_counts, x='Sterne', y='Anzahl', title='Verteilung der Sternebewertung')
-        st.plotly_chart(fig_rating, use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("Höhenmeter Analyse")
-
-    total_elevation_gain_pos = df_trainings['elevation_gain_pos'].sum()
-    total_elevation_gain_neg = df_trainings['elevation_gain_neg'].sum()
-
-    col_elev1, col_elev2 = st.columns(2)
-    with col_elev1:
-        st.metric(label="Gesamte Höhenmeter aufwärts", value=f"{total_elevation_gain_pos} m")
-    with col_elev2:
-        st.metric(label="Gesamte Höhenmeter abwärts", value=f"{total_elevation_gain_neg} m")
+        person_doc_id = int(st.session_state["person_doc_id"])
+        person_data = dp.get(doc_id=person_doc_id)
+        st.session_state.max_hr_reported_cached = person_data.get('maximalpuls')
+        
+        st.metric(label="Max. Herzfrequenz (Angabe)", value=f"{st.session_state.max_hr_reported_cached} bpm")
     
-    st.info("Diese Werte basieren auf den aus GPX/FIT-Dateien extrahierten Höhenmetern, oder manuell eingegebenen Werten.")
+    # Zusätzliche Metrik für die höchste gemessene Herzfrequenz
+    st.markdown("---")
+    st.metric(label="Max. Herzfrequenz (Gemessen aus Dateien)", value=f"{max_hr_measured} bpm" if max_hr_measured > 0 else "N/A")
+
+    st.markdown("---")
+    ### Gesamthöhenmeter
+
+    # Funktion zum Umschalten der Höhenmeter-Anzeigeart
+    def toggle_elevation_type():
+        st.session_state.show_elevation_type = 'neg' if st.session_state.show_elevation_type == 'pos' else 'pos'
+
+    # Spaltenlayout für Metrik und Button
+    metric_col, button_col = st.columns([0.7, 0.3])
+
+    with metric_col:
+        if st.session_state.show_elevation_type == 'pos':
+            st.metric(label="Höhenmeter aufwärts", value=f"{total_elevation_gain_pos} m")
+        else:
+            st.metric(label="Höhenmeter abwärts", value=f"{total_elevation_gain_neg} m")
+    
+    with button_col:
+        st.write("") # Platzhalter für vertikale Ausrichtung
+        st.write("") # Platzhalter für vertikale Ausrichtung
+        if st.session_state.show_elevation_type == 'pos':
+            st.button("⬇️ Abwärts anzeigen", on_click=toggle_elevation_type, key="toggle_elevation_down", help="Klicken, um die gesamten Höhenmeter abwärts anzuzeigen.")
+        else:
+            st.button("⬆️ Aufwärts anzeigen", on_click=toggle_elevation_type, key="toggle_elevation_up", help="Klicken, um die gesamten Höhenmeter aufwärts anzuzeigen.")
 
     st.markdown("---")
     ### Akkumulierte Power Curve (aus allen FIT-Dateien)
 
-    # Sammle alle Leistungsdaten aus allen FIT-Dateien
-    all_power_data = pd.DataFrame()
-    for training in trainings:
-        fit_base64 = training.get('fit_file')
-        if fit_base64:
-            fit_df = load_fit_data(fit_base64)
-            if fit_df is not None and 'power' in fit_df.columns and 'duration_seconds' in fit_df.columns:
-                all_power_data = pd.concat([all_power_data, fit_df[['duration_seconds', 'power']]], ignore_index=True)
-
+    # Auch hier den Cache nutzen, da die Power Curve eine aufwändige Berechnung sein kann
     @st.cache_data(show_spinner="Erstelle Power Curve...")
     def get_cached_power_curve(all_power_data_df_for_hash):
-        return calculate_accumulated_power_curve(all_power_data_df_for_hash)
+        return create_accumulated_power_curve(all_power_data_df_for_hash)
 
-    # all_power_data ist bereits das Ergebnis aus dem ersten Cache, wenn es von load_fit_data kommt
-    accumulated_pc_df = get_cached_power_curve(all_power_data) 
+    accumulated_pc_df = get_cached_power_curve(all_power_data) # all_power_data ist bereits das Ergebnis aus dem ersten Cache
 
     if not accumulated_pc_df.empty:
         # plot_power_curve ist nicht rechenintensiv, daher muss es nicht gecached werden
@@ -228,14 +383,16 @@ def main():
         st.info("Nicht genügend Leistungsdaten in den FIT-Dateien gefunden, um eine Power Curve zu erstellen.")
 
     st.markdown("---")
-    ### Weitere Metriken (Platzhalter)
+    ### Weitere Metriken
 
     col_dummy1, col_dummy2 = st.columns(2)
     with col_dummy1:
         st.metric(label="Durchschnittliche Trittfrequenz (Dummy)", value="N/A") # Platzhalter
     with col_dummy2:
-        st.metric(label="Durchschnittliche Watt (Dummy)", value="N/A") # Platzhalter
+        st.metric(label="Herzfrequenzvariabilität (Dummy)", value="N/A") # Platzhalter
 
-# Dies ist, wie Streamlit die Seite ausführt, wenn sie ausgewählt wird
+    st.info("Diese Metriken sind Platzhalter und werden in zukünftigen Updates befüllt.")
+
+# Um die `dashboard.py` direkt auszuführen, falls nötig (ansonsten wird sie von main.py importiert)
 if __name__ == "__main__":
     main()
