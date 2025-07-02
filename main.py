@@ -141,4 +141,6 @@ else:
 
     pg = st.navigation(sidebar_pages, position="sidebar", expanded=True)
     pg.run()
+
+#enjoy our app
     
