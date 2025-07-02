@@ -1,3 +1,4 @@
+
 import streamlit as st
 from tinydb import TinyDB, Query
 import os
@@ -8,14 +9,14 @@ db = TinyDB('dbperson.json')
 Person = Query()
 
 def person_anschauen_page():
-    st.title("Personen ansehen und Ansicht wechseln")
+    st.title("Ansicht wechseln")
 
     # Only allow admins to access this page
     if not st.session_state.get("admin"):
         st.warning("Sie haben keine Berechtigung, auf diese Seite zuzugreifen.")
         st.stop()
 
-    st.write("Als Administrator können Sie hier die Ansicht auf andere Personen wechseln, um deren Trainingsdaten zu sehen.")
+    #st.write("Als Administrator können Sie hier die Ansicht auf andere Personen wechseln, um deren Trainingsdaten zu sehen.")
 
     # Fetch all persons from the database
     all_persons = db.all()
@@ -31,17 +32,30 @@ def person_anschauen_page():
     current_user_name = st.session_state.get("name", "Unbekannt")
     current_user_doc_id = st.session_state.get("person_doc_id")
     current_user_id = st.session_state.get("person_id")
-    person_options[f"Mich selbst"] = current_user_id 
+    #person_options[f"Mich selbst"] = current_user_id 
+    st.markdown("### Wählen Sie eine Person aus, um deren Daten zu sehen:")
 
+    if st.button("Wechseln zur Ansicht der eigenen Daten"):
+        if current_user_doc_id == st.session_state.get("person_id"):
+            st.info("Sie sehen bereits Ihre eigenen Daten an.")
+        else:
+            st.session_state["person_doc_id"] = st.session_state.get("person_id")
+            #st.session_state["profile_to_see_name"] = current_user_name
+            
+            # Update the displayed name
+            #st.session_state["name"] = current_user_name
+            
+            st.success(f"Sie sehen nun Ihre eigenen Daten an: '{current_user_name}'.")
+            #st.info("Navigieren Sie zum Dashboard oder anderen Seiten, um die aktualisierten Daten zu sehen.")
+            st.switch_page("pages/Profil.py")
+            st.rerun()
     # Sort the options alphabetically, but keep "Yourself" at the top if present
-    sorted_options_display = sorted([key for key in person_options.keys() if "Mich selbst" not in key])
-    if "Mich selbst" in person_options:
-        sorted_options_display.insert(0, "Mich selbst")
+    sorted_options_display = sorted([key for key in person_options.keys()])
 
 
     # --- Neue Funktion: Suchen nach ID oder Name ---
     st.markdown("---")
-    st.subheader("Suchen Sie eine Person nach ID oder Name:")
+    st.subheader("Nach ID oder Namen suchen:")
     search_query = st.text_input("Geben Sie eine ID oder einen Namen ein, um zu suchen:", key="search_input")
     
     found_persons = [] # Liste zum Speichern aller gefundenen Personen
@@ -79,7 +93,7 @@ def person_anschauen_page():
                 selected_doc_id_from_search = radio_options[selected_radio_display]
                 selected_person_name_from_search = selected_radio_display.split(' (ID:')[0]
 
-                if st.button(f"Als '{selected_person_name_from_search}' ansehen"):
+                if st.button(f"Wechseln zur Ansicht der DAten von: '{selected_person_name_from_search}'"):
                     if selected_doc_id_from_search == st.session_state["person_doc_id"]:
                         st.info("Sie sehen bereits die Daten dieser Person an.")
                     else:
@@ -91,7 +105,7 @@ def person_anschauen_page():
                         #if selected_person_data:
                             #st.session_state["name"] = f"{selected_person_data.get('firstname', '')} {selected_person_data.get('lastname', '')}"
                         
-                        st.success(f"Sie sehen nun die Daten von '{st.session_state['name']}' an.")
+                        st.success(f"Sie sehen nun die Daten von '{st.session_state['name']}' ")
                         st.info("Navigieren Sie zum Dashboard oder anderen Seiten, um die aktualisierten Daten zu sehen.")
                         st.switch_page("pages/Profil.py")
                         st.rerun()
@@ -102,8 +116,9 @@ def person_anschauen_page():
     st.markdown("---")
 
     # --- Vorhandene Dropdown-Auswahl ---
+    st.subheader("Oder wählen Sie eine Person aus der Liste:")
     selected_person_display = st.selectbox(
-        "Oder wählen Sie eine Person aus der Liste:",
+        "",
         options=sorted_options_display,
         key="dropdown_selection"
     )
@@ -113,7 +128,7 @@ def person_anschauen_page():
         selected_doc_id_from_dropdown = person_options[selected_person_display]
 
     if selected_doc_id_from_dropdown:
-        if st.button(f"Als '{selected_person_display.split(' (ID:')[0]}' ansehen"):
+        if st.button(f"Wechseln zur Ansicht der Daten von '{selected_person_display.split(' (ID:')[0]}' "):
             if selected_doc_id_from_dropdown == st.session_state["person_doc_id"]:
                 st.info("Sie sehen bereits die Daten dieser Person an.")
                 st.switch_page("pages/Profil.py")
