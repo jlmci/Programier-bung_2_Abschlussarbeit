@@ -20,7 +20,21 @@ credentials:
       name: Max t2
       password: '1234'
       person_doc_id: 7
+    tttt:
+      name: tttt tttt
+      password: tttt
+      person_doc_id: 8
+    jhubermci:
+      name: Julian Huber
+      password: '1234'
+      person_doc_id: 9
+    jvolmer:
+      name: Jasper Volmer
+      password: '1234'
+      person_doc_id: 10
 permissions:
   can_add_profile_doc_ids:
   - 4
   - 5
+  - 9
+  - 10
