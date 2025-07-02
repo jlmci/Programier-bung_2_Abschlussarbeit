@@ -285,6 +285,8 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
 
 
     # --- Buttons für Anstrengung (Smiley-Buttons) ---
+    name = st.text_input("Name des Workouts", placeholder="Test 1", value=st.session_state.get(f"{prefix}name_input", ""), key=f"{prefix}name_input_form")
+        
     st.write("Wie anstrengend war das Training?")
     col1, col2, col3, col4, col5 = st.columns(5)
     antrengung_value = st.session_state.get(f"{prefix}selected_antrengung", None)
@@ -325,7 +327,7 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
     st.write("---")
     st.write("Wie würdest du dieses Workout bewerten?")
     star_rating_value = st.session_state.get(f"{prefix}selected_star_rating", None)
-
+    
     cols_stars = st.columns(5)
     for i in range(1, 6):
         with cols_stars[i-1]:
@@ -334,97 +336,100 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
             elif st.button("⭐" * i, key=f"{prefix}star_button_{i}_btn"): 
                 st.session_state[f"{prefix}selected_star_rating"] = i
                 st.rerun()
-
+    
     st.write("---")
-
+    st.markdown(
+    f"<span style='font-size: 24px; font-weight: bold;'>Dateien hochladen</span>",
+    unsafe_allow_html=True
+)
+    bild, ekg, gpx, fit = st.columns(4)
+    with bild:
     # --- Dateiuploader (MÜSSEN außerhalb des Formulars bleiben) ---
-    uploaded_image_file = st.file_uploader("Bild hochladen", type=["jpg", "jpeg", "png"], help="Optional: Füge ein Bild deines Workouts hinzu.", key=f"{prefix}image_uploader")
-    uploaded_gpx_file = st.file_uploader("GPX Datei hochladen", type=["gpx"], help="Optional: Füge eine GPX-Datei deines Workouts hinzu. Max. Größe = 200MB", key=f"{prefix}gpx_uploader")
-    uploaded_ekg_file = st.file_uploader("EKG Datei hochladen", type=["csv", "txt"], help="Optional: Füge eine EKG-Datei deines Workouts hinzu. Max. Größe = 200MB", key=f"{prefix}ekg_uploader")
-    uploaded_fit_file = st.file_uploader("FIT Datei hochladen", type=["fit"], help="Optional: Füge eine FIT-Datei deines Workouts hinzu. Max. Größe = 200MB", key=f"{prefix}fit_uploader")
+        uploaded_image_file = st.file_uploader("Bild hochladen", type=["jpg", "jpeg", "png"], help="Optional: Füge ein Bild deines Workouts hinzu.", key=f"{prefix}image_uploader")
+    with ekg:
+        uploaded_ekg_file = st.file_uploader("EKG Datei hochladen", type=["csv", "txt"], help="Optional: Füge eine EKG-Datei deines Workouts hinzu. Max. Größe = 200MB", key=f"{prefix}ekg_uploader")
+    with gpx:
+        uploaded_gpx_file = st.file_uploader("GPX Datei hochladen", type=["gpx"], help="Optional: Füge eine GPX-Datei deines Workouts hinzu. Max. Größe = 200MB", key=f"{prefix}gpx_uploader")
+        if st.button("GPX-Datei auswerten", key=f"{prefix}parse_gpx_button"):
+            if uploaded_gpx_file:
+                # Spinner um die Abarbeitung der GPX-Datei
+                with st.spinner('GPX-Datei wird ausgewertet... Dies kann einen Moment dauern.'):
+                    temp_gpx_path = os.path.join(UPLOAD_DIR, "temp_gpx_for_parsing.gpx")
+                    with open(temp_gpx_path, "wb") as f:
+                        f.write(uploaded_gpx_file.getbuffer())
+                    
+                    duration_minutes, distance_km, start_date, avg_speed, elev_pos, elev_neg = parse_gpx_data(temp_gpx_path)
+                    sport = None
+                    if duration_minutes > 0:
+                        st.session_state[f"{prefix}dauer_total_minutes_input"] = duration_minutes
+                        st.success(f"Dauer aus GPX-Datei erkannt: {format_duration(duration_minutes)}.")
+                    if distance_km > 0.0:
+                        st.session_state[f"{prefix}distanz_input"] = round(distance_km, 2)
+                        st.success(f"Distanz aus GPX-Datei erkannt: {round(distance_km, 2)} km.")
+                    if start_date:
+                        st.session_state[f"{prefix}date_input"] = start_date
+                        st.success(f"Datum aus GPX-Datei erkannt: {start_date.strftime('%Y-%m-%d')}.")
+                    if sport:
+                        st.session_state[f"{prefix}sportart_input"] = sport
+                        st.success(f"Sportart aus GPX-Datei erkannt: {sport}.")
+                    if avg_speed > 0.0:
+                        st.session_state[f"{prefix}avg_speed_input"] = round(avg_speed, 2)
+                        st.success(f"Durchschnittsgeschwindigkeit aus GPX-Datei erkannt: {round(avg_speed, 2)} km/h.")
+                    if elev_pos > 0:
+                        st.session_state[f"{prefix}elevation_gain_pos_input"] = elev_pos
+                        st.success(f"Höhenmeter aufwärts aus GPX-Datei erkannt: {elev_pos} m.")
+                    if elev_neg > 0:
+                        st.session_state[f"{prefix}elevation_gain_neg_input"] = elev_neg
+                        st.success(f"Höhenmeter abwärts aus GPX-Datei erkannt: {elev_neg} m.")
 
-    # Button zum Parsen der GPX-Daten
-    if st.button("GPX-Datei auswerten", key=f"{prefix}parse_gpx_button"):
-        if uploaded_gpx_file:
-            # Spinner um die Abarbeitung der GPX-Datei
-            with st.spinner('GPX-Datei wird ausgewertet... Dies kann einen Moment dauern.'):
-                temp_gpx_path = os.path.join(UPLOAD_DIR, "temp_gpx_for_parsing.gpx")
-                with open(temp_gpx_path, "wb") as f:
-                    f.write(uploaded_gpx_file.getbuffer())
-                
-                duration_minutes, distance_km, start_date, avg_speed, elev_pos, elev_neg = parse_gpx_data(temp_gpx_path)
-                sport = None
-                if duration_minutes > 0:
-                    st.session_state[f"{prefix}dauer_total_minutes_input"] = duration_minutes
-                    st.success(f"Dauer aus GPX-Datei erkannt: {format_duration(duration_minutes)}.")
-                if distance_km > 0.0:
-                    st.session_state[f"{prefix}distanz_input"] = round(distance_km, 2)
-                    st.success(f"Distanz aus GPX-Datei erkannt: {round(distance_km, 2)} km.")
-                if start_date:
-                    st.session_state[f"{prefix}date_input"] = start_date
-                    st.success(f"Datum aus GPX-Datei erkannt: {start_date.strftime('%Y-%m-%d')}.")
-                if sport:
-                    st.session_state[f"{prefix}sportart_input"] = sport
-                    st.success(f"Sportart aus GPX-Datei erkannt: {sport}.")
-                if avg_speed > 0.0:
-                    st.session_state[f"{prefix}avg_speed_input"] = round(avg_speed, 2)
-                    st.success(f"Durchschnittsgeschwindigkeit aus GPX-Datei erkannt: {round(avg_speed, 2)} km/h.")
-                if elev_pos > 0:
-                    st.session_state[f"{prefix}elevation_gain_pos_input"] = elev_pos
-                    st.success(f"Höhenmeter aufwärts aus GPX-Datei erkannt: {elev_pos} m.")
-                if elev_neg > 0:
-                    st.session_state[f"{prefix}elevation_gain_neg_input"] = elev_neg
-                    st.success(f"Höhenmeter abwärts aus GPX-Datei erkannt: {elev_neg} m.")
+                    if os.path.exists(temp_gpx_path):
+                        os.remove(temp_gpx_path)
+                st.rerun() # Wichtig, damit die neuen Werte in den Input-Feldern angezeigt werden
+            else:
+                st.warning("Bitte lade zuerst eine GPX-Datei hoch, um sie auszuwerten.")
+    with fit:
+        uploaded_fit_file = st.file_uploader("FIT Datei hochladen", type=["fit"], help="Optional: Füge eine FIT-Datei deines Workouts hinzu. Max. Größe = 200MB", key=f"{prefix}fit_uploader")
+        if st.button("FIT-Datei auswerten", key=f"{prefix}parse_fit_button"):
+            if uploaded_fit_file:
+                # Spinner um die Abarbeitung der FIT-Datei
+                with st.spinner('FIT-Datei wird ausgewertet... Dies kann einen Moment dauern.'):
+                    temp_fit_path = os.path.join(UPLOAD_DIR, "temp_fit_for_parsing.fit")
+                    with open(temp_fit_path, "wb") as f:
+                        f.write(uploaded_fit_file.getbuffer())
+                    
+                    duration_minutes, distance_km, start_date, sport, average_heart_rate, avg_speed, elev_pos, elev_neg = parse_fit_data(temp_fit_path)
+                    
+                    if duration_minutes > 0:
+                        st.session_state[f"{prefix}dauer_total_minutes_input"] = duration_minutes
+                        st.success(f"Dauer aus FIT-Datei erkannt: {format_duration(duration_minutes)}.")
+                    if distance_km > 0.0:
+                        st.session_state[f"{prefix}distanz_input"] = round(distance_km, 2)
+                        st.success(f"Distanz aus FIT-Datei erkannt: {round(distance_km, 2)} km.")
+                    if start_date:
+                        st.session_state[f"{prefix}date_input"] = start_date
+                        st.success(f"Datum aus FIT-Datei erkannt: {start_date.strftime('%Y-%m-%d')}.")
+                    if sport:
+                        st.session_state[f"{prefix}sportart_input"] = sport
+                        st.success(f"Sportart aus FIT-Datei erkannt: {sport}.")
+                    if average_heart_rate > 0:
+                        st.session_state[f"{prefix}puls_input"] = average_heart_rate
+                        st.success(f"Durchschnittlicher Puls aus FIT-Datei erkannt: {average_heart_rate} bpm.")
+                    if avg_speed > 0.0:
+                        st.session_state[f"{prefix}avg_speed_input"] = round(avg_speed, 2)
+                        st.success(f"Durchschnittsgeschwindigkeit aus FIT-Datei erkannt: {round(avg_speed, 2)} km/h.")
+                    if elev_pos > 0:
+                        st.session_state[f"{prefix}elevation_gain_pos_input"] = elev_pos
+                        st.success(f"Höhenmeter aufwärts aus FIT-Datei erkannt: {elev_pos} m.")
+                    if elev_neg > 0:
+                        st.session_state[f"{prefix}elevation_gain_neg_input"] = elev_neg
+                        st.success(f"Höhenmeter abwärts aus FIT-Datei erkannt: {elev_neg} m.")
 
-                if os.path.exists(temp_gpx_path):
-                    os.remove(temp_gpx_path)
-            st.rerun() # Wichtig, damit die neuen Werte in den Input-Feldern angezeigt werden
-        else:
-            st.warning("Bitte lade zuerst eine GPX-Datei hoch, um sie auszuwerten.")
-
-    # Button zum Parsen der FIT-Daten
-    if st.button("FIT-Datei auswerten", key=f"{prefix}parse_fit_button"):
-        if uploaded_fit_file:
-            # Spinner um die Abarbeitung der FIT-Datei
-            with st.spinner('FIT-Datei wird ausgewertet... Dies kann einen Moment dauern.'):
-                temp_fit_path = os.path.join(UPLOAD_DIR, "temp_fit_for_parsing.fit")
-                with open(temp_fit_path, "wb") as f:
-                    f.write(uploaded_fit_file.getbuffer())
-                
-                duration_minutes, distance_km, start_date, sport, average_heart_rate, avg_speed, elev_pos, elev_neg = parse_fit_data(temp_fit_path)
-                
-                if duration_minutes > 0:
-                    st.session_state[f"{prefix}dauer_total_minutes_input"] = duration_minutes
-                    st.success(f"Dauer aus FIT-Datei erkannt: {format_duration(duration_minutes)}.")
-                if distance_km > 0.0:
-                    st.session_state[f"{prefix}distanz_input"] = round(distance_km, 2)
-                    st.success(f"Distanz aus FIT-Datei erkannt: {round(distance_km, 2)} km.")
-                if start_date:
-                    st.session_state[f"{prefix}date_input"] = start_date
-                    st.success(f"Datum aus FIT-Datei erkannt: {start_date.strftime('%Y-%m-%d')}.")
-                if sport:
-                    st.session_state[f"{prefix}sportart_input"] = sport
-                    st.success(f"Sportart aus FIT-Datei erkannt: {sport}.")
-                if average_heart_rate > 0:
-                    st.session_state[f"{prefix}puls_input"] = average_heart_rate
-                    st.success(f"Durchschnittlicher Puls aus FIT-Datei erkannt: {average_heart_rate} bpm.")
-                if avg_speed > 0.0:
-                    st.session_state[f"{prefix}avg_speed_input"] = round(avg_speed, 2)
-                    st.success(f"Durchschnittsgeschwindigkeit aus FIT-Datei erkannt: {round(avg_speed, 2)} km/h.")
-                if elev_pos > 0:
-                    st.session_state[f"{prefix}elevation_gain_pos_input"] = elev_pos
-                    st.success(f"Höhenmeter aufwärts aus FIT-Datei erkannt: {elev_pos} m.")
-                if elev_neg > 0:
-                    st.session_state[f"{prefix}elevation_gain_neg_input"] = elev_neg
-                    st.success(f"Höhenmeter abwärts aus FIT-Datei erkannt: {elev_neg} m.")
-
-                if os.path.exists(temp_fit_path):
-                    os.remove(temp_fit_path)
-            st.rerun() # Wichtig, damit die neuen Werte in den Input-Feldern angezeigt werden
-        else:
-            st.warning("Bitte lade zuerst eine FIT-Datei hoch, um sie auszuwerten.")
-
-    st.write("---")
+                    if os.path.exists(temp_fit_path):
+                        os.remove(temp_fit_path)
+                st.rerun() # Wichtig, damit die neuen Werte in den Input-Feldern angezeigt werden
+            else:
+                st.warning("Bitte lade zuerst eine FIT-Datei hoch, um sie auszuwerten.")
+    
 
     # --- Das Formular selbst (Start des Formular-Kontexts) ---
     with st.form(key=f"{prefix}workout_form"):
@@ -437,7 +442,7 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
             st.markdown("---")
 
         # Verwende get() für die value-Parameter, um KeyError zu vermeiden, falls ein Wert mal fehlen sollte
-        name = st.text_input("Name des Workouts", placeholder="Test 1", value=st.session_state.get(f"{prefix}name_input", ""), key=f"{prefix}name_input_form")
+        #name = st.text_input("Name des Workouts", placeholder="Test 1", value=st.session_state.get(f"{prefix}name_input", ""), key=f"{prefix}name_input_form")
         
         date = st.date_input("Datum", value=st.session_state.get(f"{prefix}date_input", datetime.now().date()), key=f"{prefix}date_input_form")
         sportart = st.text_input("Sportart", placeholder="z.B. Laufen, Radfahren, Schwimmen", value=st.session_state.get(f"{prefix}sportart_input", ""), key=f"{prefix}sportart_input_form")
@@ -516,6 +521,7 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
                 "elevation_gain_pos": elevation_gain_pos, 
                 "elevation_gain_neg": elevation_gain_neg 
             }
+        
         # Cancel-Button (für den Bearbeitungsmodus)
         if is_edit_mode:
             cancel_submitted = st.form_submit_button("Abbrechen")
