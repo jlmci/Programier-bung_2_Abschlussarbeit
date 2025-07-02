@@ -102,10 +102,17 @@ else: # Benutzer ist eingeloggt
     # sobald sie einmal durch Inhalt oder st.Page() "aktiviert" wurde.
     # Da wir nun die Sidebar manuell befüllen, wird sie nur angezeigt, wenn dieser Else-Block läuft.
     
-    st.sidebar.markdown(f"**Willkommen, {st.session_state['name']}!**")
-    if st.session_state["person_doc_id"] != st.session_state["person_id"]:
-                        nameto_see = st.session_state["profile_to_see_name"]
-                        st.sidebar.markdown(f"**Du siehst das profil von, {nameto_see}!**")
+    st.sidebar.markdown(
+    f"**Willkommen, <span style='font-size: 20px;'>{st.session_state['name']}</span>!**",
+    unsafe_allow_html=True
+    )
+
+    if st.session_state.get("person_doc_id") != st.session_state.get("person_id"):
+        nameto_see = st.session_state.get("profile_to_see_name", "Unbekanntes Profil") # Sicherstellen, dass der Key existiert
+        st.sidebar.markdown(
+            f"**Du siehst das Profil von,<br><span style='font-size: 20px;'>{nameto_see}</span>!**",
+            unsafe_allow_html=True
+    )
     
     # Optionen für die Sidebar-Navigation
     sidebar_options = ["Dashboard", "Profil", "Workout hinzufügen", "Testseite", "Person anschauen"]
@@ -127,15 +134,16 @@ else: # Benutzer ist eingeloggt
     # Inhalt der Hauptseite basierend auf der Auswahl laden
     # Dies ersetzt die pg.run() Logik
     sidebar_pages = [
-        st.Page("pages/dashboard.py", title="Dashboard", icon="📊"),
-        st.Page("pages/Profil.py", title="Profil", icon="👤"),
+        st.Page("pages/dashboard.py", title="Lesitungsübersicht", icon="📊"),
+        st.Page("pages/Trainingsliste.py", title="Trainingstagebuch", icon="🧪"),
         st.Page("pages/add workout.py", title="Workout hinzufügen", icon="🏋️"),
-        st.Page("pages/Trainingsliste.py", title="Testseite", icon="🧪")
+        st.Page("pages/Profil.py", title="Profil", icon="👤")
+        
     ]
 
     if st.session_state["admin"]:
         sidebar_pages.append(st.Page("pages/add_profile.py", title="Profil hinzufügen", icon="➕"))
-        sidebar_pages.append(st.Page("pages/person_anschauen.py", title="Person anschauen", icon="👀"))
+        sidebar_pages.append(st.Page("pages/person_anschauen.py", title="Nutzer als Admin betrachten", icon="👀"))
 
 
     pg = st.navigation(sidebar_pages, position="sidebar", expanded=True)
