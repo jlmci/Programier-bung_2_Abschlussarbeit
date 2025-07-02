@@ -4,6 +4,7 @@ from datetime import datetime
 from tinydb import TinyDB, Query
 import os
 import sys
+#import inspect
 
 # Ensure the directory containing hilfsfunktionenedittraining.py is in sys.path
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -12,6 +13,10 @@ if script_dir not in sys.path:
 
 # Import the functions from the new file
 # Make sure parse_fit_data is included in this import list
+#currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+#parentdir = os.path.dirname(currentdir)
+#sys.path.insert(0, parentdir)
+#from Module.hilfsfunktionenedittraining import display_workout_form
 from hilfsfunktionenedittraining import display_workout_form, save_uploaded_file, parse_gpx_data, parse_fit_data, format_duration
 
 # --- Datenbank-Initialisierung ---
@@ -22,7 +27,18 @@ Test = Query()
 
 # --- Hilfsfunktionen für die Datenbank-Interaktion ---
 def add_training_to_db(training_data, person_id):
-    """Fügt ein neues Training zur dbtests-Datenbank hinzu und verknüpft es mit einer Person."""
+    """
+    Fügt ein neues Training zur 'dbtests'-Datenbank hinzu und verknüpft es mit einer Person in der 'dbperson'-Datenbank.
+
+    Args:
+        training_data (dict): Ein Dictionary, das die Daten des neuen Trainings enthält.
+                              Beispiel: `{"name": "Lauf am Morgen", "date": "2023-10-26", ...}`
+        person_id (int): Die ID der Person, mit der das Training verknüpft werden soll.
+
+    Returns:
+        bool: True, wenn das Training erfolgreich hinzugefügt und verknüpft wurde,
+              andernfalls False.
+    """
     try:
         # Füge das Training zu dbtests hinzu
         doc_id = db.insert(training_data)
@@ -43,7 +59,18 @@ def add_training_to_db(training_data, person_id):
         return False
 
 def update_training_in_db(updated_training_data, training_doc_id):
-    """Aktualisiert ein Training in der TinyDB."""
+    """
+    Aktualisiert ein bestehendes Training in der 'dbtests'-Datenbank.
+
+    Args:
+        updated_training_data (dict): Ein Dictionary, das die zu aktualisierenden Trainingsdaten enthält.
+                                      Die Schlüssel müssen den Feldern in der Datenbank entsprechen.
+        training_doc_id (int): Die Dokumenten-ID des Trainings, das aktualisiert werden soll.
+
+    Returns:
+        bool: True, wenn das Training erfolgreich aktualisiert wurde,
+              andernfalls False.
+    """
     try:
         db.update(updated_training_data, doc_ids=[training_doc_id])
         st.success(f"Training '{updated_training_data['name']}' erfolgreich aktualisiert.")
@@ -53,7 +80,16 @@ def update_training_in_db(updated_training_data, training_doc_id):
         return False
 
 def get_training_by_id(training_id):
-    """Ruft ein Training anhand seiner Doc ID ab."""
+    """
+    Ruft ein Training anhand seiner Dokumenten-ID aus der 'dbtests'-Datenbank ab.
+
+    Args:
+        training_id (int): Die Dokumenten-ID des abzurufenden Trainings.
+
+    Returns:
+        dict or None: Ein Dictionary, das die Trainingsdaten repräsentiert, wenn ein Training mit der angegebenen ID gefunden wird.
+                      Andernfalls None.
+    """
     return db.get(doc_id=training_id)
 
 # --- Hauptanwendung ---
