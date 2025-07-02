@@ -32,6 +32,14 @@ credentials:
       name: Jasper Volmer
       password: '1234'
       person_doc_id: 10
+    testbild:
+      name: test bildname
+      password: '1234'
+      person_doc_id: 11
+    test1bild:
+      name: test1 bildname
+      password: '1234'
+      person_doc_id: 12
 permissions:
   can_add_profile_doc_ids:
   - 4

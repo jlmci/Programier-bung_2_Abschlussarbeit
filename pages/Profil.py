@@ -14,6 +14,7 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir)
 
+from utils import normalize_path_slashes
 # --- Import your Person class ---
 from Person.Personenklasse import Person
 
@@ -69,7 +70,7 @@ Nutzer = Person(
     date_of_birth=user_data["date_of_birth"],
     firstname=user_data["firstname"],
     lastname=user_data["lastname"],
-    picture_path=user_data.get("picture_path", "pictures/default.jpg"),
+    picture_path=normalize_path_slashes(user_data.get("picture_path", "pictures/default.jpg")),
     gender=user_data["gender"],
     ekg_test_ids=user_data.get("ekg_tests", []),
     maximal_hr=user_data.get("maximalpuls", 200)
@@ -99,7 +100,13 @@ with bild_col:
         with open(new_picture_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         
-        Nutzer.picture_path = new_picture_path
+        Nutzer.picture_path = normalize_path_slashes(new_picture_path) # <--- GEÄNDERT
+        
+        # WICHTIG: Du musst diesen neuen Pfad auch in der TinyDB aktualisieren!
+        # Der aktuelle Code aktualisiert nur das Nutzer-Objekt im Speicher,
+        # aber nicht die Datenbank selbst. Hier ist, wie du das tun würdest:
+        db.update({"picture_path": Nutzer.picture_path}, doc_ids=[int(st.session_state.current_user_id)]) # <--- NEU: Füge diese Zeile hinzu!
+        
         st.success("Bild erfolgreich hochgeladen und gesetzt!")
         st.rerun()
 

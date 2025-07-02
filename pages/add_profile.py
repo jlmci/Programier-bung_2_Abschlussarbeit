@@ -220,6 +220,7 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir)
 
+from utils import normalize_path_slashes
 # Importiere deine Person-Klasse, auch wenn sie hier nicht instanziiert wird,
 # um die Datenstruktur zu verstehen und zu validieren.
 # from Person.Personenklasse import Person
@@ -331,7 +332,6 @@ with st.form("add_profile_form"):
         upload_dir = "uploaded_pictures"
         os.makedirs(upload_dir, exist_ok=True)
         
-        # Sicherstellen, dass der Dateiname eindeutig ist, um Überschreiben zu vermeiden
         file_extension = uploaded_file.name.split('.')[-1]
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         unique_filename = f"{new_firstname.lower()}_{new_lastname.lower()}_{timestamp}.{file_extension}"
@@ -342,12 +342,12 @@ with st.form("add_profile_form"):
             with open(new_picture_path_full, "wb") as f:
                 f.write(uploaded_file.getbuffer())
             st.success(f"Bild erfolgreich hochgeladen: {unique_filename}")
-            picture_path_to_save = new_picture_path_full # Der Pfad, der in die DB gespeichert wird
+            picture_path_to_save = normalize_path_slashes(new_picture_path_full) # <--- HIER ANWENDEN
             st.image(picture_path_to_save, caption="Vorschau hochgeladenes Bild", use_container_width=True)
         except Exception as e:
             st.error(f"Fehler beim Speichern des Bildes: {e}")
             st.warning("Es wird ein Standardbild verwendet.")
-            picture_path_to_save = "data/pictures/default.jpg" # Fallback auf Standardbild
+            picture_path_to_save = normalize_path_slashes("data/pictures/default.jpg")
 
 
     st.markdown("---")
