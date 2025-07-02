@@ -1,55 +1,54 @@
-
 import streamlit as st
 from datetime import datetime, timedelta
 import os
 import gpxpy
 import gpxpy.gpx
 import pandas as pd
-from fitparse import FitFile # Import the fitparse library
-import numpy as np # Import numpy for numerical operations
+from fitparse import FitFile
+import numpy as np
+import base64
+import io # Importiere io für BytesIO
 
 # --- Konfiguration & Konstanten ---
-UPLOAD_DIR = "uploaded_files"
-os.makedirs(UPLOAD_DIR, exist_ok=True) # Sicherstellen, dass das Verzeichnis existiert
+# UPLOAD_DIR und os.makedirs werden entfernt, da Dateien nicht mehr auf dem Dateisystem gespeichert werden.
+# Stattdessen werden Dateien direkt im Speicher verarbeitet oder als Base64 gespeichert.
 
-# --- Hilfsfunktion zum Speichern von Dateien ---
+# --- Hilfsfunktion zum Speichern von Dateien (jetzt zum Kodieren in Base64) ---
 def save_uploaded_file(uploaded_file, file_prefix, workout_name):
     """
-    Speichert eine hochgeladene Datei im UPLOAD_DIR mit einem eindeutigen Namen.
+    Kodiert eine hochgeladene Datei in einen Base64-String.
 
     Args:
         uploaded_file (streamlit.runtime.uploaded_file_manager.UploadedFile):
             Das von st.file_uploader erhaltene Dateiobjekt.
-        file_prefix (str): Ein Präfix für den Dateinamen (z.B. "img", "gpx").
-        workout_name (str): Der Name des Workouts, um den Dateinamen aussagekräftiger zu machen.
+        file_prefix (str): Ein Präfix für den Dateinamen (wird hier nicht direkt für den Inhalt genutzt,
+                           aber die Signatur bleibt für Konsistenz).
+        workout_name (str): Der Name des Workouts (wird hier nicht direkt für den Inhalt genutzt,
+                            aber die Signatur bleibt für Konsistenz).
 
     Returns:
-        str or None: Der Pfad zur gespeicherten Datei oder None, wenn keine Datei hochgeladen wurde.
+        str or None: Der Base64-kodierte String der Datei oder None, wenn keine Datei hochgeladen wurde.
     """
     if uploaded_file is not None:
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        file_extension = uploaded_file.name.split(".")[-1]
-        safe_name = workout_name.replace(' ', '_').replace('/', '_').replace('\\', '_')
-        unique_filename = f"{safe_name}_{file_prefix}_{timestamp}.{file_extension}"
-        file_path = os.path.join(UPLOAD_DIR, unique_filename)
-        
         try:
-            with open(file_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            return file_path
+            # Lese den Inhalt der Datei als Bytes
+            file_bytes = uploaded_file.getvalue()
+            # Kodieren in Base64
+            encoded_string = base64.b64encode(file_bytes).decode('utf-8')
+            return encoded_string
         except Exception as e:
-            st.error(f"Fehler beim Speichern der Datei {uploaded_file.name}: {e}")
+            st.error(f"Fehler beim Kodieren der Datei {uploaded_file.name} in Base64: {e}")
             return None
     return None
 
-# --- Funktion zum Parsen von GPX-Dateien ---
-def parse_gpx_data(gpx_file_path):
+# --- Funktion zum Parsen von GPX-Dateien aus Base64-String ---
+def parse_gpx_data(gpx_base64_string):
     """
-    Parst eine GPX-Datei und extrahiert Dauer, Distanz, Datum,
+    Parst einen Base64-kodierten GPX-String und extrahiert Dauer, Distanz, Datum,
     Durchschnittsgeschwindigkeit und Höhenmeter (hoch und runter).
 
     Args:
-        gpx_file_path (str): Der Pfad zur GPX-Datei.
+        gpx_base64_string (str): Der Base64-kodierte String der GPX-Datei.
 
     Returns:
         tuple: (duration_minutes, total_distance_km, start_date, avg_speed_kmh, elevation_gain_pos, elevation_gain_neg)
@@ -68,14 +67,17 @@ def parse_gpx_data(gpx_file_path):
     times = []
     distances = []
 
-    if not os.path.exists(gpx_file_path):
+    if not gpx_base64_string:
         return 0, 0.0, None, None, 0.0, 0, 0
 
     try:
-        with open(gpx_file_path, 'r') as gpx_file:
-            gpx = gpxpy.parse(gpx_file)
+        # Dekodiere den Base64-String zurück zu Bytes
+        gpx_bytes = base64.b64decode(gpx_base64_string)
+        # Erstelle ein dateiähnliches Objekt aus den Bytes
+        gpx_file = io.BytesIO(gpx_bytes)
+        gpx = gpxpy.parse(gpx_file)
 
-        # Extract points for elevation and time calculations
+        # Extrahiere Punkte für Höhen- und Zeitberechnungen
         current_distance = 0.0
         prev_point = None
         for track in gpx.tracks:
@@ -93,27 +95,26 @@ def parse_gpx_data(gpx_file_path):
                             elevations.append(point.elevation)
                         
                         if prev_point:
-                            # Calculate distance between points
+                            # Berechne Distanz zwischen Punkten
                             point_distance_2d = point.distance_2d(prev_point)
                             current_distance += point_distance_2d
-                        distances.append(current_distance) # Store cumulative distance
+                        distances.append(current_distance) # Speichere kumulative Distanz
                         prev_point = point
-
         
         if min_time and max_time:
             time_difference = max_time - min_time
             duration_minutes = int(time_difference.total_seconds() / 60)
             start_date = min_time.date()
         
-        # Total distance from gpxpy (more accurate than summing point-to-point 2D distances for total)
+        # Gesamtdistanz von gpxpy (genauer als die Summe der Punkt-zu-Punkt-2D-Distanzen für die Gesamtstrecke)
         total_distance_meters = gpx.length_2d()
         total_distance_km = total_distance_meters / 1000.0
 
-        # Calculate average speed
+        # Berechne Durchschnittsgeschwindigkeit
         if duration_minutes > 0:
             avg_speed_kmh = (total_distance_km / duration_minutes) * 60 # km/min * 60 min/h = km/h
         
-        # Calculate Elevation Gain (Positive and Negative)
+        # Berechne Höhenmeter (positiv und negativ)
         if len(elevations) > 1:
             diff_elevations = np.diff(elevations)
             elevation_gain_pos = int(np.sum(diff_elevations[diff_elevations > 0]))
@@ -124,14 +125,14 @@ def parse_gpx_data(gpx_file_path):
         st.error(f"Fehler beim Parsen der GPX-Datei: {e}")
         return 0, 0.0, None, None, 0.0, 0, 0
 
-# --- Funktion zum Parsen von FIT-Dateien ---
-def parse_fit_data(fit_file_path):
+# --- Funktion zum Parsen von FIT-Dateien aus Base64-String ---
+def parse_fit_data(fit_base64_string):
     """
-    Parst eine FIT-Datei und extrahiert Dauer, Distanz, Datum, Sportart, Puls,
+    Parst einen Base64-kodierten FIT-String und extrahiert Dauer, Distanz, Datum, Sportart, Puls,
     Durchschnittsgeschwindigkeit und Höhenmeter (hoch und runter).
 
     Args:
-        fit_file_path (str): Der Pfad zur FIT-Datei.
+        fit_base64_string (str): Der Base64-kodierte String der FIT-Datei.
 
     Returns:
         tuple: (duration_minutes, total_distance_km, start_date, sportart, average_heart_rate, avg_speed_kmh, elevation_gain_pos, elevation_gain_neg)
@@ -145,11 +146,14 @@ def parse_fit_data(fit_file_path):
     speeds = []
     elevations = []
 
-    if not os.path.exists(fit_file_path):
+    if not fit_base64_string:
         return 0, 0.0, None, None, 0, 0.0, 0, 0
 
     try:
-        fitfile = FitFile(fit_file_path)
+        # Dekodiere den Base64-String zurück zu Bytes
+        fit_bytes = base64.b64decode(fit_base64_string)
+        # Erstelle ein dateiähnliches Objekt aus den Bytes
+        fitfile = FitFile(io.BytesIO(fit_bytes))
         
         min_timestamp = None
         max_timestamp = None
@@ -161,10 +165,10 @@ def parse_fit_data(fit_file_path):
                     min_timestamp = timestamp
                 if max_timestamp is None or timestamp > max_timestamp:
                     max_timestamp = timestamp
-                if start_date is None: # Set start_date from the first timestamp
+                if start_date is None: # Setze start_date vom ersten Zeitstempel
                     start_date = timestamp.date()
 
-            # Distance is cumulative, so take the max value
+            # Distanz ist kumulativ, also nimm den Maximalwert
             distance_meters = record.get_value('distance')
             if distance_meters is not None:
                 total_distance_km = max(total_distance_km, distance_meters / 1000.0) 
@@ -173,16 +177,16 @@ def parse_fit_data(fit_file_path):
             if hr_val is not None:
                 heart_rates.append(hr_val)
             
-            speed_val_ms = record.get_value('speed') # speed in m/s
+            speed_val_ms = record.get_value('speed') # Geschwindigkeit in m/s
             if speed_val_ms is not None:
                 speeds.append(speed_val_ms)
 
-            elevation_val = record.get_value('altitude') # altitude in meters
+            elevation_val = record.get_value('altitude') # Höhe in Metern
             if elevation_val is not None:
                 elevations.append(elevation_val)
 
 
-        # Get session messages for total duration and sport (prefer these if available)
+        # Hole Session-Nachrichten für Gesamtdauer und Sportart (bevorzuge diese, falls verfügbar)
         for session in fitfile.get_messages('session'):
             if session.get_value('total_timer_time'):
                 duration_minutes = int(session.get_value('total_timer_time') / 60)
@@ -193,27 +197,26 @@ def parse_fit_data(fit_file_path):
         
         avg_speed_kmh = 0.0
         if speeds:
-            # Average of speeds from records (in m/s), then convert to km/h
+            # Durchschnitt der Geschwindigkeiten aus den Records (in m/s), dann Umrechnung in km/h
             avg_speed_ms = np.mean(speeds)
             avg_speed_kmh = avg_speed_ms * 3.6 # m/s * (3600 s / 1000 m) = km/h
         
-        # Fallback for duration and speed if session data is missing, using timestamps
+        # Fallback für Dauer und Geschwindigkeit, falls Session-Daten fehlen, unter Verwendung von Zeitstempeln
         if duration_minutes == 0 and min_timestamp and max_timestamp:
             time_diff_seconds = (max_timestamp - min_timestamp).total_seconds()
             duration_minutes = int(time_diff_seconds / 60)
             if total_distance_km > 0 and duration_minutes > 0:
-                # Recalculate average speed if duration was derived from timestamps and total_distance_km exists
+                # Berechne Durchschnittsgeschwindigkeit neu, falls Dauer aus Zeitstempeln abgeleitet wurde und total_distance_km existiert
                 avg_speed_kmh = (total_distance_km / duration_minutes) * 60
 
-        # Calculate Elevation Gain (Positive and Negative)
+        # Berechne Höhenmeter (positiv und negativ)
         elevation_gain_pos = 0
         elevation_gain_neg = 0
         if len(elevations) > 1:
-            # Ensure elevations are float for diff, then convert back to int for sum
+            # Stelle sicher, dass Höhenangaben für diff float sind, dann wieder in int für die Summe umwandeln
             diff_elevations = np.diff(np.array(elevations, dtype=float))
             elevation_gain_pos = int(np.sum(diff_elevations[diff_elevations > 0]))
             elevation_gain_neg = int(np.sum(diff_elevations[diff_elevations < 0]))
-
 
         return duration_minutes, total_distance_km, start_date, sportart, average_heart_rate, avg_speed_kmh, elevation_gain_pos, abs(elevation_gain_neg)
 
@@ -274,6 +277,7 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
         st.session_state[f"{prefix}elevation_gain_pos_input"] = int(initial_data.get('elevation_gain_pos', 0)) if is_edit_mode else 0
         st.session_state[f"{prefix}elevation_gain_neg_input"] = int(initial_data.get('elevation_gain_neg', 0)) if is_edit_mode else 0
 
+        # Diese Pfade werden nicht mehr benötigt, da der Inhalt in Base64 gespeichert wird
         st.session_state[f"{prefix}current_image_path"] = initial_data.get('image', None) if is_edit_mode else None
         st.session_state[f"{prefix}current_gpx_path"] = initial_data.get('gpx_file', None) if is_edit_mode else None
         st.session_state[f"{prefix}current_ekg_path"] = initial_data.get('ekg_file', None) if is_edit_mode else None
@@ -297,9 +301,8 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
     with col2:
         if antrengung_value == "ok":
             st.markdown("### 🙂 leicht")
-        # FEHLER BEHOBEN: Hier war f"{prefix}prefix}"
         elif st.button("🙂 leicht", key=f"{prefix}smiley_ok_btn"): 
-            st.session_state[f"{prefix}selected_antrengung"] = "ok" # <-- Hier war der Fehler
+            st.session_state[f"{prefix}selected_antrengung"] = "ok"
             st.rerun()
     with col3:
         if antrengung_value == "neutral":
@@ -345,12 +348,12 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
     # Button zum Parsen der GPX-Daten
     if st.button("GPX-Datei auswerten", key=f"{prefix}parse_gpx_button"):
         if uploaded_gpx_file:
-            temp_gpx_path = os.path.join(UPLOAD_DIR, "temp_gpx_for_parsing.gpx")
-            with open(temp_gpx_path, "wb") as f:
-                f.write(uploaded_gpx_file.getbuffer())
+            # Direktes Lesen des Inhalts und Kodieren in Base64
+            gpx_base64_content = base64.b64encode(uploaded_gpx_file.getvalue()).decode('utf-8')
             
-            duration_minutes, distance_km, start_date, avg_speed, elev_pos, elev_neg = parse_gpx_data(temp_gpx_path)
-            sport = None
+            duration_minutes, distance_km, start_date, avg_speed, elev_pos, elev_neg = parse_gpx_data(gpx_base64_content)
+            sport = None # GPX enthält normalerweise keine Sportart
+
             if duration_minutes > 0:
                 st.session_state[f"{prefix}dauer_total_minutes_input"] = duration_minutes
                 st.success(f"Dauer aus GPX-Datei erkannt: {format_duration(duration_minutes)}.")
@@ -360,7 +363,7 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
             if start_date:
                 st.session_state[f"{prefix}date_input"] = start_date
                 st.success(f"Datum aus GPX-Datei erkannt: {start_date.strftime('%Y-%m-%d')}.")
-            if sport:
+            if sport: # Dieser Block wird für GPX nicht zutreffen, aber bleibt für Konsistenz
                 st.session_state[f"{prefix}sportart_input"] = sport
                 st.success(f"Sportart aus GPX-Datei erkannt: {sport}.")
             if avg_speed > 0.0:
@@ -373,8 +376,6 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
                 st.session_state[f"{prefix}elevation_gain_neg_input"] = elev_neg
                 st.success(f"Höhenmeter abwärts aus GPX-Datei erkannt: {elev_neg} m.")
 
-            if os.path.exists(temp_gpx_path):
-                os.remove(temp_gpx_path)
             st.rerun() # Wichtig, damit die neuen Werte in den Input-Feldern angezeigt werden
         else:
             st.warning("Bitte lade zuerst eine GPX-Datei hoch, um sie auszuwerten.")
@@ -382,11 +383,10 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
     # Button zum Parsen der FIT-Daten
     if st.button("FIT-Datei auswerten", key=f"{prefix}parse_fit_button"):
         if uploaded_fit_file:
-            temp_fit_path = os.path.join(UPLOAD_DIR, "temp_fit_for_parsing.fit")
-            with open(temp_fit_path, "wb") as f:
-                f.write(uploaded_fit_file.getbuffer())
+            # Direktes Lesen des Inhalts und Kodieren in Base64
+            fit_base64_content = base64.b64encode(uploaded_fit_file.getvalue()).decode('utf-8')
             
-            duration_minutes, distance_km, start_date, sport, average_heart_rate, avg_speed, elev_pos, elev_neg = parse_fit_data(temp_fit_path)
+            duration_minutes, distance_km, start_date, sport, average_heart_rate, avg_speed, elev_pos, elev_neg = parse_fit_data(fit_base64_content)
             
             if duration_minutes > 0:
                 st.session_state[f"{prefix}dauer_total_minutes_input"] = duration_minutes
@@ -413,8 +413,6 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
                 st.session_state[f"{prefix}elevation_gain_neg_input"] = elev_neg
                 st.success(f"Höhenmeter abwärts aus FIT-Datei erkannt: {elev_neg} m.")
 
-            if os.path.exists(temp_fit_path):
-                os.remove(temp_fit_path)
             st.rerun() # Wichtig, damit die neuen Werte in den Input-Feldern angezeigt werden
         else:
             st.warning("Bitte lade zuerst eine FIT-Datei hoch, um sie auszuwerten.")
@@ -423,12 +421,14 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
 
     # --- Das Formular selbst (Start des Formular-Kontexts) ---
     with st.form(key=f"{prefix}workout_form"):
-        # Zeige aktuelle Dateipfade im Bearbeitungsmodus an
+        # Zeige aktuelle Dateipfade im Bearbeitungsmodus an (jetzt nur den Dateinamen, da Inhalt Base64 ist)
         if is_edit_mode:
-            st.markdown(f"**Aktuelles Bild:** {os.path.basename(st.session_state.get(f'{prefix}current_image_path', '')) if st.session_state.get(f'{prefix}current_image_path') else 'Kein Bild'}")
-            st.markdown(f"**Aktuelle GPX-Datei:** {os.path.basename(st.session_state.get(f'{prefix}current_gpx_path', '')) if st.session_state.get(f'{prefix}current_gpx_path') else 'Keine GPX-Datei'}")
-            st.markdown(f"**Aktuelle EKG-Datei:** {os.path.basename(st.session_state.get(f'{prefix}current_ekg_path', '')) if st.session_state.get(f'{prefix}current_ekg_path') else 'Keine EKG-Datei'}")
-            st.markdown(f"**Aktuelle FIT-Datei:** {os.path.basename(st.session_state.get(f'{prefix}current_fit_path', '')) if st.session_state.get(f'{prefix}current_fit_path') else 'Keine FIT-Datei'}")
+            # Hier müsste man den originalen Dateinamen speichern, wenn man ihn anzeigen will.
+            # Da wir nur den Base64-String speichern, können wir nur anzeigen, ob eine Datei vorhanden ist.
+            st.markdown(f"**Aktuelles Bild:** {'Vorhanden' if st.session_state.get(f'{prefix}current_image_path') else 'Kein Bild'}")
+            st.markdown(f"**Aktuelle GPX-Datei:** {'Vorhanden' if st.session_state.get(f'{prefix}current_gpx_path') else 'Keine GPX-Datei'}")
+            st.markdown(f"**Aktuelle EKG-Datei:** {'Vorhanden' if st.session_state.get(f'{prefix}current_ekg_path') else 'Keine EKG-Datei'}")
+            st.markdown(f"**Aktuelle FIT-Datei:** {'Vorhanden' if st.session_state.get(f'{prefix}current_fit_path') else 'Keine FIT-Datei'}")
             st.markdown("---")
 
         # Verwende get() für die value-Parameter, um KeyError zu vermeiden, falls ein Wert mal fehlen sollte
@@ -487,6 +487,7 @@ def display_workout_form(initial_data=None, form_key_suffix="add"):
                 return None
             
             # Dateipfade handhaben: Neue Uploads überschreiben alte Pfade
+            # Jetzt werden Base64-Strings gespeichert
             link_image = save_uploaded_file(uploaded_image_file, "img", name) or st.session_state.get(f"{prefix}current_image_path")
             link_gpx = save_uploaded_file(uploaded_gpx_file, "gpx", name) or st.session_state.get(f"{prefix}current_gpx_path")
             link_ekg = save_uploaded_file(uploaded_ekg_file, "ekg", name) or st.session_state.get(f"{prefix}current_ekg_path")

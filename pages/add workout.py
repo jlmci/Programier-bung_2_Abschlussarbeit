@@ -1,17 +1,18 @@
-
 import streamlit as st
 from datetime import datetime
 from tinydb import TinyDB, Query
 import os
 import sys
 
-# Ensure the directory containing hilfsfunktionenedittraining.py is in sys.path
+# Stelle sicher, dass das Verzeichnis mit hilfsfunktionenedittraining.py im sys.path ist
 script_dir = os.path.dirname(os.path.abspath(__file__))
-if script_dir not in sys.path:
-    sys.path.insert(0, script_dir)
+# Gehe ein Verzeichnis hoch, um den Ordner zu finden, in dem hilfsfunktionenedittraining.py liegt
+parent_dir = os.path.dirname(script_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
-# Import the functions from the new file
-# Make sure parse_fit_data is included in this import list
+# Importiere die Funktionen aus der neuen Datei
+# parse_fit_data, parse_gpx_data, save_uploaded_file wurden in hilfsfunktionenedittraining.py angepasst
 from hilfsfunktionenedittraining import display_workout_form, save_uploaded_file, parse_gpx_data, parse_fit_data, format_duration
 
 # --- Datenbank-Initialisierung ---
@@ -32,53 +33,51 @@ def add_training_to_db(training_data, person_id):
         person_doc = dp.get(doc_id=int(person_id))
         if person_doc:
             current_ekg_tests = person_doc.get('ekg_tests', [])
-            current_ekg_tests.append(doc_id)
-            dp.update({'ekg_tests': current_ekg_tests}, doc_ids=[int(person_id)])
-            st.success(f"Training erfolgreich mit Person {person_id} verknüpft.")
+            if doc_id not in current_ekg_tests:
+                current_ekg_tests.append(doc_id)
+                dp.update({'ekg_tests': current_ekg_tests}, doc_ids=[int(person_id)])
+                st.success(f"Training erfolgreich mit Person {person_id} verknüpft.")
+            else:
+                st.info(f"Training mit ID {doc_id} war bereits für Person {person_id} registriert.")
         else:
-            st.error(f"Fehler: Person mit ID {person_id} nicht in der Personendatenbank gefunden.")
+            st.warning(f"Person mit ID {person_id} nicht gefunden. Training wurde hinzugefügt, aber nicht verknüpft.")
         return True
     except Exception as e:
         st.error(f"Fehler beim Hinzufügen des Trainings: {e}")
         return False
 
-def update_training_in_db(updated_training_data, training_doc_id):
-    """Aktualisiert ein Training in der TinyDB."""
+def update_training_in_db(training_data, training_doc_id):
+    """Aktualisiert ein bestehendes Training in der dbtests-Datenbank."""
     try:
-        db.update(updated_training_data, doc_ids=[training_doc_id])
-        st.success(f"Training '{updated_training_data['name']}' erfolgreich aktualisiert.")
+        db.update(training_data, doc_ids=[training_doc_id])
+        st.success(f"Training mit ID {training_doc_id} erfolgreich aktualisiert!")
         return True
     except Exception as e:
-        st.error(f"Fehler beim Aktualisieren des Trainings: {e}")
+        st.error(f"Fehler beim Aktualisieren des Trainings mit ID {training_doc_id}: {e}")
         return False
 
-def get_training_by_id(training_id):
-    """Ruft ein Training anhand seiner Doc ID ab."""
-    return db.get(doc_id=training_id)
+# --- Hauptlogik der Seite ---
+def add_workout_page():
+    st.title("Workout hinzufügen oder bearbeiten")
 
-# --- Hauptanwendung ---
-def main():
-    st.title("Workout hinzufügen / bearbeiten 🏃‍♀️")
-    st.markdown("---")
+    current_user_id = st.session_state.get("person_doc_id")
+    if not current_user_id:
+        st.warning("Bitte melden Sie sich an, um Workouts hinzuzufügen oder zu bearbeiten.")
+        return
 
-    if "current_user_id" not in st.session_state:
-        st.warning("Bitte warten, die Seite baut sich auf.")
-        st.stop() # Stoppt die Ausführung der Seite
-
-    current_user_id = st.session_state.current_user_id
-
-    # Prüfen, ob ein Training zum Bearbeiten ausgewählt wurde
     editing_training_id = st.session_state.get('editing_training_id')
-    
+
     if editing_training_id:
-        st.subheader("Training bearbeiten")
-        training_to_edit = get_training_by_id(editing_training_id)
+        st.subheader(f"Workout bearbeiten (ID: {editing_training_id})")
+        
+        # Lade die Daten des zu bearbeitenden Trainings
+        training_to_edit = db.get(doc_id=editing_training_id)
+
         if training_to_edit:
-            # Zeige das Formular im Bearbeitungsmodus an
             submitted_data = display_workout_form(initial_data=training_to_edit, form_key_suffix="edit")
             
             if submitted_data == "CANCEL":
-                st.session_state.editing_training_id = None
+                st.session_state.editing_training_id = None # End edit mode
                 st.session_state.last_loaded_id_check = None # Reset for workout_form_utils (important!)
                 st.session_state.initial_expand_done = False # Reset for trainingsliste
                 st.switch_page("pages/trainingsliste.py") # Go back to the list
@@ -96,16 +95,16 @@ def main():
             st.switch_page("pages/trainingsliste.py") # Go back to the list to fix error
     else:
         st.subheader("Neues Workout hinzufügen")
-        # Show the form in add mode
+        # Zeige das Formular im Hinzufügen-Modus
         submitted_data = display_workout_form(form_key_suffix="add")
 
         if submitted_data:
             if add_training_to_db(submitted_data, current_user_id):
                 st.success("Workout erfolgreich hinzugefügt!")
-                # Optional: Reset fields or switch to the training list
+                # Optional: Felder zurücksetzen oder zur Trainingsliste wechseln
                 st.session_state.initial_expand_done = False # Reset for trainingsliste
-                st.switch_page("pages/trainingsliste.py")
+                st.switch_page("pages/trainingsliste.py") # Wechsel zur Trainingsliste
 
-
+# Dies ist, wie Streamlit die Seite ausführt, wenn sie ausgewählt wird
 if __name__ == "__main__":
-    main()
+    add_workout_page()
