@@ -31,9 +31,9 @@ Die Darstellung soll etwa so sein.
 
 
 
-# Trainingstagebuch App
+# Trainingstagebuch App im Stramlit
 
-Willkommen zur Trainingstagebuch App. Diese Streamlit-Anwendung ermöglicht die Verfolgung sportlicher Aktivitäten, die Einsicht in detaillierte Statistiken und die Überwachung von Fortschritten. Administratoren haben zusätzlich die Möglichkeit, Profile zu verwalten und die Daten anderer Benutzer einzusehen.
+Diese Streamlit-Anwendung ermöglicht die Verfolgung sportlicher Aktivitäten, die Einsicht in detaillierte Statistiken und die Überwachung von Fortschritten. Administratoren haben zusätzlich die Möglichkeit, Profile zu verwalten und die Daten anderer Benutzer einzusehen.
 
 ---
 
@@ -84,7 +84,7 @@ Zur lokalen Ausführung der App sind folgende Schritte erforderlich:
  - 1.1 gehe auf das repository, dann auf code und kopiere den code
  - 1.2 Öffne ein neues Fenster auf VS Studio
  - 1.3 Klicke auf repository klonen und füge den Link ein
-- 2 aktiviere das virtual environment mit pdm install
+- 2 aktiviere das virtual environment mit pdm install wir empfehlen Python version 3.10.4 für reibungslosen ablauf
  - 2.1 öffne das powershell Terminal in
  - 2.2 gib "pdm install" ein
 - 3 starte die App indem Sie im terminal im ordern des repositories pdm run streamlit run main.py eingeben.
@@ -104,6 +104,7 @@ Diese Sektion führt durch die Funktionen der Trainingstagebuch App.
 - Beim Start der App wird der Login-Bildschirm angezeigt.
 - Geben Sie den Benutzernamen und das Passwort ein, die in der config.yaml Datei festgelegt sind.
 - Führen Sie den Login durch. Bei korrekten Daten erfolgt die Weiterleitung zum Dashboard. Bei falschen Daten wird eine entsprechende Meldung angezeigt.
+![Login Fenster](/pictures_readme/Login%20fenster.PNG)
 
 ### Dashboard
 
@@ -115,15 +116,16 @@ Das Dashboard bietet einen schnellen Überblick über die Trainingsdaten:
 - *Max. Herzfrequenz (Gemessen aus Dateien):* Höchster Puls, der in hochgeladenen FIT-Dateien gemessen wurde.
 - *Höhenmeter:* Umschaltbare Anzeige für aufwärts oder abwärts zurückgelegte Höhenmeter.
 - *Akkumulierte Power Curve:* Grafische Darstellung der besten durchschnittlichen Leistungen über verschiedene Zeiträume, basierend auf FIT-Dateien.
+![Dashboard fenseter](/pictures_readme/Dashboard%20fenster.PNG)
 
 ### Profil
 
 Auf der Profilseite können persönliche Daten verwaltet und aktualisiert werden:
-
-- *Persönliche Informationen:* Bearbeiten Sie Vorname, Nachname, Geburtsjahr, Geschlecht und Maximalpuls.
+- *Persönliche Informationen:* Bearbeiten Sie Maximalpuls. Das ändern der anderen Daten ist den Admins vorbehalten
 - *Profilbild hochladen:* Laden Sie ein Bild von Ihrem Computer hoch.
 - *Änderungen speichern:* Sichern Sie die aktualisierten Informationen.
 - *Benutzername oder Passwort ändern:* Geben Sie das aktuelle Passwort zur Bestätigung ein. Geben Sie dann einen neuen Benutzernamen (optional) und/oder ein neues Passwort ein. Nach dem Ändern des Benutzernamens ist eine erneute Anmeldung mit dem neuen Namen erforderlich.
+![Profil fenster](/pictures_readme/Profil%20fenster.PNG)
 
 ### Workout hinzufügen
 
@@ -133,12 +135,13 @@ Diese Seite dient der Erfassung neuer Trainingseinheiten oder der Bearbeitung be
   - Details eingeben: Füllen Sie Felder wie Name, Datum, Sportart, Dauer, Distanz, Puls, Kalorien, Anstrengung und Bewertung aus. Fügen Sie eine detaillierte Beschreibung hinzu.
   - Dateien hochladen: Laden Sie passende Bilder, GPX-Dateien (für GPS-Track und Höhenprofil), FIT-Dateien (für detaillierte Leistungsdaten) oder EKG-Dateien hoch.
   - Speichern: Fügen Sie das Training zur Datenbank hinzu.
+  ![Workout hinzufügen fenster](/pictures_readme/Workout%20hinzufügen%20fenster.PNG)
 
 - *Training bearbeiten:*
   - Wählen Sie ein Training aus der "Trainingsliste" zum Bearbeiten aus. Die Seite öffnet sich mit den vorhandenen Daten.
   - Nehmen Sie Änderungen vor und speichern Sie diese. Mit "Abbrechen" kehren Sie zur Trainingsliste zurück.
 
-### Alle Trainings: Trainingsliste
+### Alle Trainings: Trainingstagebuch
 
 Hier finden Sie eine vollständige Liste aller erfassten Trainings.
 
@@ -147,7 +150,10 @@ Hier finden Sie eine vollständige Liste aller erfassten Trainings.
 - *Interaktive Diagramme:* Für FIT-Dateien können Sie über Checkboxen auswählen, welche Diagramme (Herzfrequenz, Leistung, Geschwindigkeit, Trittfrequenz) angezeigt werden sollen.
 - *Bearbeiten:* Klicken Sie auf "Bearbeiten 📝", um das Training im Formular "Workout hinzufügen" zu öffnen.
 - *Löschen:* Klicken Sie auf "Löschen 🗑️", um ein Training dauerhaft aus der Datenbank zu entfernen. Diese Aktion kann nicht rückgängig gemacht werden.
-
+![Trainings liste](/pictures_readme/traiings%20liste.PNG)
+![Trainingsfenster 1](/pictures_readme/Trainingsfenster%201.PNG)
+![Trainingsfenster 2](/pictures_readme/Trainingsfenster%202.PNG)
+![Trainingsfenster 3](/pictures_readme/Trainingsfenster%203.PNG)
 ---
 
 ### Für Administratoren: Person anschauen
@@ -158,6 +164,7 @@ Hier finden Sie eine vollständige Liste aller erfassten Trainings.
 - *Person aus Liste auswählen:* Wählen Sie eine Person aus der Dropdown-Liste oder suchen Sie nach ID/Namen.
 - *Ansicht wechseln:* Klicken Sie auf "Als '[Name der Person]' ansehen". Die App zeigt dann die Daten dieser Person an. Um zu den eigenen Daten zurückzukehren, wählen Sie "Mich selbst" aus der Liste.
 - Passwort der Person ist auch von Admin einsehbar
+![Person wechseln fesnter](/pictures_readme/beutzer%20wechseln%20fenster.PNG)
 
 ---
 
@@ -173,6 +180,8 @@ Hier finden Sie eine vollständige Liste aller erfassten Trainings.
 
 *Wichtiger Hinweis:* Nach dem Erstellen eines neuen Profils muss die App neu gestartet werden, damit der neue Benutzer im Login-Bildschirm sichtbar wird.
 
+![Profil hinzufügen fenster](/pictures_readme/Profil%20hinzufügen%20fenster.PNG)
+
 ---
 
 ## 4. Erfüllte Aufgabe:
@@ -184,26 +193,88 @@ Alle Basisaufgaben wurden erfüllt
   
   
 Bei den zusatzaufgaben wurde folgendes erledigt
-- Daten aus einer anderen Datenquelle einlesen (z.B. .fit oder txt .csv .gpx)
-- Daten in einer tinyDB speichern
-- Herzrate im sinnvollen gleitenden Durchschnitt als Plot anzeigen
-- Kartendarstellung von gpx-Trainings-Files
-- Höhenprofiel aus gpx-File
-- login (nutzername und Passwort)
-- permission system (Nutzer und Admin)
-- passwortänderung durch nutzer und admin
-- eigene admin funktionen ("profile hinzufügen" und "in ansicht von nutzer wechseln")
-- akkumulierte Trainingsdaten über mehrer Trainings anzeigen inkl. Power curve
-- viele unterschiedliche fit-file-plots auszuwählen
-- auswertungen von .fit und.gpx files
-- maximalpuls berechnung
-- power curve pro training
-- weitere Metriken
-  - Höhenmeter (hoch und runter)
-  - gesamtdistanz
-  - gesamtzeit
-- bewertung von trainings
+
+ **1. Dateisystem**
+* **Datenimport:**
+    * Unterstützung für das Einlesen von Daten aus verschiedenen Quellen:
+        * `.fit`-Dateien
+        * `.txt`-Dateien
+        * `.csv`-Dateien
+        * `.gpx`-Dateien
+* **Datenbank:**
+    * Effiziente Speicherung aller Trainingsdaten in einer **TinyDB**.
 
 ---
 
+ **2. Benutzer- und Berechtigungsmanagement**
+
+Hier werden die Funktionen für die Nutzerverwaltung und die Zugriffsrechte innerhalb der Anwendung beschrieben.
+
+* **Authentifizierung:**
+    * Sicheres **Login-System** mit Benutzername und Passwort.
+* **Berechtigungssystem:**
+    * Differenzierung zwischen **Nutzer- und Admin-Rollen** für angepasste Zugriffsrechte.
+* **Passwortverwaltung:**
+    * Möglichkeit zur **Passwortänderung** sowohl für Nutzer als auch für Admins.
+* **Admin-Funktionen:**
+    * **"Profile hinzufügen"**: Admins können neue Nutzer- oder Sportlerprofile anlegen.
+    * **"In Ansicht von Nutzer wechseln"**: Admins können die Anwendung aus der Perspektive eines Nutzers sehen, um Support zu leisten oder Einstellungen zu überprüfen.
+
+---
+
+ **3. Analyse und Visualisierung von Einzeltrainings**
+
+Dieser Abschnitt konzentriert sich auf die detaillierte Auswertung und Darstellung spezifischer Trainingseinheiten.
+
+* **GPS-basierte Analysen (`.gpx`):**
+    * Interaktive **Kartendarstellung** von `.gpx`-Trainings-Files.
+    * Detaillierte Anzeige des **Höhenprofils** aus `.gpx`-Dateien.
+* **Fit-File-Analysen (`.fit`):**
+    * Eine Vielzahl von **Fit-File-Plots** zur Auswahl, um verschiedene Metriken (z.B. Geschwindigkeit, Trittfrequenz, Leistung) zu visualisieren.
+* **Allgemeine Metriken pro Training:**
+    * Anzeige der **Herzrate** im sinnvollen gleitenden Durchschnitt als übersichtlicher Plot.
+    * Berechnung und Visualisierung der **Power Curve** pro Training.
+    * Detaillierte Angaben zu **Höhenmetern** (hoch und runter).
+    * Gesamte **Distanz** des Trainings.
+    * Gesamte **Zeitdauer** des Trainings.
+    * Berechnung des **Maximalpulses** (pro Training).
+* **Bewertung von Trainings:**
+    * Möglichkeit, individuelle **Bewertungen** oder Notizen zu jedem Training hinzuzufügen.
+
+---
+
+ **4. Akkumulierte Daten und Fortschrittsanalyse**
+
+Dieser Bereich ermöglicht die langfristige Auswertung über mehrere Trainingseinheiten hinweg, um den Fortschritt zu verfolgen.
+
+* **Akkumulierte Trainingsdaten:**
+    * Übersichtliche Darstellung aller gesammelten Trainingsdaten über einen längeren Zeitraum.
+    * Umfassende **Power Curve** über mehrere Trainings hinweg (oder basierend auf ausgewählten Zeiträumen).
+    * Weitere aggregierte Metriken wie die Gesamtstrecke aller Trainings, die kumulierte Trainingszeit und die gesamten Höhenmeter.
+---
+
 ## 5. Nutzer der App:
+relevante Nutzer der App, liste kann natürlich erweitert werden
+  - mmustermann:
+    - name: Max Mustermann
+    - password: '1234'
+    - person_doc_id: 3
+  - jhubermci:
+    - name: Julian Huber
+    - password: '1234'
+    - person_doc_id: 9
+  - jvolmer:
+    - name: Jasper Volmer
+    - password: '1234'
+    - person_doc_id: 10
+  - miamusterfrau:
+    - name: Mia Musterfrau
+    - password: '1234'
+    - person_doc_id: 11
+
+## 6. Probleme
+- Wenn mehrere Trainings hintereindaer hinzugefügt werden wird bis auf den Namen und die files nichts gelöscht bzw bleiben die alten Daten bestehen/vorausgefüllt
+  - Wir wissen nicht ganz wieso es nicht geht aber setzten uns noch einmal dran. 
+  - Unter normaler nutzung der APP wird pro login immer nur ein Training hochgeladen (und zwar das soeben absolvierte) nach erneutem login sind die Felder dann auch wider frei. Das Problem besteht also in der realen Benutzung nicht.
+
+- Wenn in der Streamlit share änderungen an den files gemacht werden und die pfade der Dateien somit neu in die datenbang gespeichrt werden, werden sie nur in dieser session gespeichert aber nicht in das richtige github repository gespeichert. Das bedeutet, dass die änderungen bei erneutem öffnen der APP nicht gespeichert sind
