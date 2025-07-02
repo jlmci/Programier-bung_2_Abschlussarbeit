@@ -937,9 +937,6 @@ def display_ekg_data_ui(ekg_obj, training_id_for_key):
         )
     )
 
-    # Setze den Titel für die gesamte Figur
-    
-
     # Aktualisiere Achsenbeschriftungen
     fig.update_xaxes(title="Zeit (s)")
     fig.update_yaxes(title="Messwerte (mV)")
@@ -966,13 +963,15 @@ def display_ekg_data_ui(ekg_obj, training_id_for_key):
 
 
     # Herzfrequenzdaten hinzufügen, wenn vorhanden und im Zeitbereich
+    # Wir rufen estimate_heart_rate nur einmal auf, um alle Daten zu erhalten
+    heart_rate_df_full = None
     try:
-        heart_rate_df = ekg_obj.estimate_heart_rate()
+        heart_rate_df_full = ekg_obj.estimate_heart_rate()
         
-        # Filter Herzfrequenzdaten nach dem aktuellen Zeitbereich
-        heart_rate_df_in_view = heart_rate_df[
-            (heart_rate_df["Zeit in s"] >= start_time) & 
-            (heart_rate_df["Zeit in s"] <= end_time)
+        # Filter Herzfrequenzdaten nach dem aktuellen Zeitbereich für den Plot
+        heart_rate_df_in_view = heart_rate_df_full[
+            (heart_rate_df_full["Zeit in s"] >= start_time) & 
+            (heart_rate_df_full["Zeit in s"] <= end_time)
         ]
 
         if not heart_rate_df_in_view.empty:
@@ -1004,6 +1003,12 @@ def display_ekg_data_ui(ekg_obj, training_id_for_key):
 
     st.plotly_chart(fig, use_container_width=True, key=f"ekg_chart_{training_id_for_key}")
 
+    # NEU: Durchschnittliche Herzfrequenz über die gesamte Trainingsdistanz anzeigen
+    if heart_rate_df_full is not None and not heart_rate_df_full.empty:
+        average_hr_overall = heart_rate_df_full["Herzfrequenz (BPM)"].mean()
+        st.markdown(f"**Durchschnittliche der EKG Datenreihe:** {average_hr_overall:.2f} BPM")
+    else:
+        st.info("Für dieses Training sind keine Herzfrequenzdaten zur Berechnung des Durchschnitts verfügbar.")
 
 def load_fit_data(fit_filepath):
     """
