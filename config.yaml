@@ -12,18 +12,6 @@ credentials:
       name: Max Mustermann
       password: passwort123
       person_doc_id: 3
-    mt1:
-      name: Max2 test
-      password: '12345'
-      person_doc_id: 6
-    mt2:
-      name: Max t2
-      password: '1234'
-      person_doc_id: 7
-    tttt:
-      name: tttt tttt
-      password: tttt
-      person_doc_id: 8
     jhubermci:
       name: Julian Huber
       password: '1234'
@@ -32,14 +20,10 @@ credentials:
       name: Jasper Volmer
       password: '1234'
       person_doc_id: 10
-    testbild:
-      name: test bildname
+    miamusterfrau:
+      name: Mia Musterfrau
       password: '1234'
       person_doc_id: 11
-    test1bild:
-      name: test1 bildname
-      password: '1234'
-      person_doc_id: 12
 permissions:
   can_add_profile_doc_ids:
   - 4
