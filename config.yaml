@@ -10,7 +10,7 @@ credentials:
       person_doc_id: 4
     mmustermann:
       name: Max Mustermann
-      password: passwort123
+      password: 1234
       person_doc_id: 3
     jhubermci:
       name: Julian Huber
