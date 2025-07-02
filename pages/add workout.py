@@ -4,20 +4,13 @@ from datetime import datetime
 from tinydb import TinyDB, Query
 import os
 import sys
-#import inspect
 
-# Ensure the directory containing hilfsfunktionenedittraining.py is in sys.path
 script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir not in sys.path:
     sys.path.insert(0, script_dir)
 
-# Import the functions from the new file
-# Make sure parse_fit_data is included in this import list
-#currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-#parentdir = os.path.dirname(currentdir)
-#sys.path.insert(0, parentdir)
-#from Module.hilfsfunktionenedittraining import display_workout_form
-from hilfsfunktionenedittraining import display_workout_form, save_uploaded_file, parse_gpx_data, parse_fit_data, format_duration
+
+from Module.hilfsfunktionenedittraining import display_workout_form, save_uploaded_file, parse_gpx_data, parse_fit_data, format_duration
 
 # --- Datenbank-Initialisierung ---
 db = TinyDB('dbtests.json')

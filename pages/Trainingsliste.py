@@ -18,8 +18,8 @@ from tinydb import TinyDB, Query
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-#from Module.ekgdata import EKGdata
-from auswertungen.ekgdata import EKGdata
+from Module.ekgdata import EKGdata
+
 
 IMAGE_DIR = "images"
 DATA_DIR = "data"
@@ -1127,7 +1127,7 @@ def get_trainings_for_current_user():
               record belonging to the current user. Returns an empty list if no user
               is selected, the user data is not found, or the user has no linked trainings.
     """
-    
+
     if "current_user_id" not in st.session_state:
         return []
     

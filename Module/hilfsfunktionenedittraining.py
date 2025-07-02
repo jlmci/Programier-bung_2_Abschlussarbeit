@@ -17,7 +17,7 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir) # Stellt sicher, dass das Projekt-Root im Python-Pfad ist
 
-from utils import normalize_path_slashes 
+from Module.utils import normalize_path_slashes 
 
 # --- Konfiguration & Konstanten ---
 UPLOAD_DIR = "uploaded_files"

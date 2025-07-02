@@ -7,9 +7,9 @@ from tinydb import TinyDB, Query
 # Sidebar standardmäßig einklappen
 st.set_page_config(page_title="Trainingstagebuch", page_icon="💪", layout="wide", initial_sidebar_state="collapsed")
 
-#db = TinyDB('dbperson.json')
 
-# Initialize the session state for login status and user details.
+
+
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 if "username" not in st.session_state:
@@ -22,7 +22,7 @@ if "admin" not in st.session_state:
     st.session_state["admin"] = False
 if "person_id" not in st.session_state:
     st.session_state["person_id"] = None
-# Neu: Session State für die aktuell ausgewählte Seite
+
 if "current_page" not in st.session_state:
     st.session_state["current_page"] = "Login"
 if "profile_to_see_name" not in st.session_state:
@@ -87,7 +87,7 @@ if not st.session_state["logged_in"]:
                     
                     st.success(f"Willkommen, {st.session_state['name']}!")
                     
-                    # Nach erfolgreichem Login zur Dashboard-Seite weiterleiten
+                    
                     st.session_state["current_page"] = "Dashboard"
                     st.rerun()
                 else:
@@ -95,12 +95,7 @@ if not st.session_state["logged_in"]:
             else:
                 st.error("Benutzername nicht gefunden.")
 
-else: # Benutzer ist eingeloggt
-    # Sidebar erweitern, sobald der Benutzer eingeloggt ist
-    # HINWEIS: st.set_page_config kann nur einmal ganz am Anfang der App aufgerufen werden.
-    # Wir können den initial_sidebar_state hier nicht ändern. Die Sidebar bleibt expandiert,
-    # sobald sie einmal durch Inhalt oder st.Page() "aktiviert" wurde.
-    # Da wir nun die Sidebar manuell befüllen, wird sie nur angezeigt, wenn dieser Else-Block läuft.
+else: 
     
     st.sidebar.markdown(
     f"**Willkommen, <span style='font-size: 20px;'>{st.session_state['name']}</span>!**",
@@ -108,31 +103,29 @@ else: # Benutzer ist eingeloggt
     )
 
     if st.session_state.get("person_doc_id") != st.session_state.get("person_id"):
-        nameto_see = st.session_state.get("profile_to_see_name", "Unbekanntes Profil") # Sicherstellen, dass der Key existiert
+        nameto_see = st.session_state.get("profile_to_see_name", "Unbekanntes Profil") 
         st.sidebar.markdown(
             f"**Du siehst das Profil von,<br><span style='font-size: 20px;'>{nameto_see}</span>!**",
             unsafe_allow_html=True
     )
     
-    # Optionen für die Sidebar-Navigation
+    
     sidebar_options = ["Dashboard", "Profil", "Workout hinzufügen", "Testseite", "Person anschauen"]
     if st.session_state["admin"]:
         sidebar_options.append("Profil hinzufügen")
     
     
-    # Logout-Button in der Sidebar
     if st.sidebar.button("Logout"):
         st.session_state["logged_in"] = False
         st.session_state["username"] = None
         st.session_state["name"] = None
         st.session_state["person_doc_id"] = None
         st.session_state["admin"] = False
-        st.session_state["current_page"] = "Login" # Zurück zur Login-Seite
+        st.session_state["current_page"] = "Login" 
         st.info("Sie wurden abgemeldet.")
         st.rerun()
 
-    # Inhalt der Hauptseite basierend auf der Auswahl laden
-    # Dies ersetzt die pg.run() Logik
+    
     sidebar_pages = [
         st.Page("pages/dashboard.py", title="Lesitungsübersicht", icon="📊"),
         st.Page("pages/Trainingsliste.py", title="Trainingstagebuch", icon="🧪"),
@@ -148,3 +141,4 @@ else: # Benutzer ist eingeloggt
 
     pg = st.navigation(sidebar_pages, position="sidebar", expanded=True)
     pg.run()
+    

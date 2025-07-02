@@ -14,8 +14,8 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir)
 
-#from Module.utils import normalize_path_slashes
-from utils import normalize_path_slashes
+
+from Module.utils import normalize_path_slashes
 
 
 
