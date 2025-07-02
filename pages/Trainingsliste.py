@@ -121,7 +121,7 @@ def load_fit_data(fit_filepath):
         return None
     
     # Spinner für FIT-Dateiladevorgang
-    with st.spinner(f"Lade und verarbeite FIT-Daten aus {os.path.basename(abs_filepath)}..."):
+    with st.spinner(f"Lade und verarbeite FIT-Daten ..."):
         try:
             fitfile = fitparse.FitFile(abs_filepath)
 
@@ -453,7 +453,7 @@ def display_fit_data_ui(fit_df, training_id_for_key):
         checkboxes.append(("Power Curve", True, f"show_power_curve_{training_id_for_key}"))
     
     if has_gps_data:
-        checkboxes.append(("Strecke (FIT-Karte)", True, f"show_fit_map_checkbox_{training_id_for_key}")) 
+        checkboxes.append(("Karte", True, f"show_fit_map_checkbox_{training_id_for_key}")) 
     
     checkboxes.append(("Herzfrequenz", False, f"show_hr_checkbox_{training_id_for_key}"))
     
@@ -477,7 +477,7 @@ def display_fit_data_ui(fit_df, training_id_for_key):
     # --- Display der Diagramme basierend auf den Checkbox-States ---
 
     # Display FIT Map
-    if "Strecke (FIT-Karte)" in checkbox_states and checkbox_states["Strecke (FIT-Karte)"]:
+    if "Karte" in checkbox_states and checkbox_states["Karte"]:
         if has_gps_data:
             st.markdown("### FIT-Track auf Karte")
             # Spinner für die Kartendarstellung
@@ -485,14 +485,13 @@ def display_fit_data_ui(fit_df, training_id_for_key):
                 display_fit_map_ui(fit_df, training_id_for_key)
         else:
             st.info("Keine GPS-Daten in der FIT-Datei gefunden, daher keine Karte verfügbar.")
-    elif "Strecke (FIT-Karte)" in checkbox_states: 
+    elif "Karte" in checkbox_states: 
         pass
 
 
     # Display Power Curve
     if "Power Curve" in checkbox_states and checkbox_states["Power Curve"]:
         if has_power_data:
-            st.markdown("---")
             st.markdown("### Power Curve")
             # Spinner für die Power Curve Generierung ist bereits in create_power_curve()
             power_curve_df = create_power_curve(fit_df)
@@ -511,7 +510,6 @@ def display_fit_data_ui(fit_df, training_id_for_key):
 
     if "Herzfrequenz" in checkbox_states and checkbox_states["Herzfrequenz"]:
         if 'heart_rate' in fit_df.columns and fit_df['heart_rate'].dropna().any():
-            st.markdown("---")
             with st.spinner("Erstelle Herzfrequenzdiagramm..."):
                 fig_hr = px.line(fit_df, x='time', y='heart_rate', title='Herzfrequenz über die Zeit',
                                  labels={'time': 'Zeit', 'heart_rate': 'Herzfrequenz (bpm)'})
@@ -522,7 +520,6 @@ def display_fit_data_ui(fit_df, training_id_for_key):
     
     if "Leistung" in checkbox_states and checkbox_states["Leistung"]:
         if has_power_data:
-            st.markdown("---")
             with st.spinner("Erstelle Leistungsdiagramm..."):
                 fig_power = px.line(fit_df, x='time', y='power', title='Leistung über die Zeit',
                                      labels={'time': 'Zeit', 'power': 'Leistung (Watt)'})
@@ -533,7 +530,6 @@ def display_fit_data_ui(fit_df, training_id_for_key):
 
     if "Geschwindigkeit" in checkbox_states and checkbox_states["Geschwindigkeit"]:
         if 'velocity' in fit_df.columns and fit_df['velocity'].dropna().any():
-            st.markdown("---")
             with st.spinner("Erstelle Geschwindigkeitsdiagramm..."):
                 fig_vel = px.line(fit_df, x='time', y='velocity', title='Geschwindigkeit über die Zeit',
                                      labels={'time': 'Zeit', 'velocity': 'Geschwindigkeit (m/s)'})
@@ -544,7 +540,6 @@ def display_fit_data_ui(fit_df, training_id_for_key):
 
     if "Trittfrequenz" in checkbox_states and checkbox_states["Trittfrequenz"]:
         if 'cadence' in fit_df.columns and fit_df['cadence'].dropna().any():
-            st.markdown("---")
             with st.spinner("Erstelle Trittfrequenzdiagramm..."):
                 fig_cad = px.line(fit_df, x='time', y='cadence', title='Trittfrequenz über die Zeit',
                                      labels={'time': 'Zeit', 'cadence': 'Trittfrequenz (rpm)'})
@@ -597,6 +592,7 @@ def display_training_details_ui(training_data, on_delete_callback, on_edit_callb
     expander_title = f"**{training_data['name']}** - {training_data['date']} ({training_data['sportart']})"
     
     with st.expander(expander_title, expanded=expanded):
+        st.markdown(f"<span style='font-size:30px; font-weight:bold'>{training_data['name']}</span>", unsafe_allow_html=True)
         st.markdown(f"**Datum:** {training_data['date']}")
         st.markdown(f"**Sportart:** {training_data['sportart']}")
         
@@ -614,8 +610,8 @@ def display_training_details_ui(training_data, on_delete_callback, on_edit_callb
         st.markdown(f"**Dauer:** {duration_display}") 
 
         st.markdown(f"**Distanz:** {training_data.get('distanz', 'N/A')} km")
-        st.markdown(f"**Puls:** {training_data.get('puls', 'N/A')} bpm (avg)")
-        st.markdown(f"**Kalorien:** {training_data.get('kalorien', 'N/A')} kcal")
+        st.markdown(f"**Durchschnittlicher Puls:** {training_data.get('puls', 'N/A')} bpm ")
+        st.markdown(f"**Kalorien verbraucht:** {training_data.get('kalorien', 'N/A')} kcal")
         
         avg_speed = training_data.get('avg_speed_kmh')
         if avg_speed is not None:
@@ -638,22 +634,18 @@ def display_training_details_ui(training_data, on_delete_callback, on_edit_callb
         st.markdown(f"**Anstrengung:** {anstrengung_map.get(training_data.get('anstrengung', ''), 'N/A')}")
         st.markdown(f"**Bewertung:** {'⭐' * training_data.get('star_rating', 0)}")
 
-        st.markdown(f"**Beschreibung:**")
         description = training_data.get('description', '')
-        if description:
-            st.info(description)
-        else:
-            st.markdown("Keine Beschreibung vorhanden.")
+        st.markdown(f"**Beschreibung:** : {description if description else 'Keine Beschreibung vorhanden.'}")
+        
 
         image_path_from_db = training_data.get('image')
         local_image_path = image_path_from_db
         if local_image_path and os.path.exists(local_image_path):
-            st.image(local_image_path, caption=f"Bild für {training_data['name']}", use_container_width=True)
+            st.image(local_image_path, caption=f"", use_container_width=True)
         elif image_path_from_db and image_path_from_db != "-":
             st.warning(f"Bilddatei {repr(image_path_from_db)} konnte nicht gefunden werden.")
 
-        st.markdown("**Verlinkte Dateien:**")
-
+        st.markdown("---")
         gpx_file_path_from_db = training_data.get('gpx_file')
         # Spinner für GPX-Daten
         with st.spinner("Lade GPX-Daten..."):
@@ -663,7 +655,6 @@ def display_training_details_ui(training_data, on_delete_callback, on_edit_callb
             # Spinner für die Kartendarstellung
             with st.spinner("Rendere GPX-Karte..."):
                 display_gpx_on_map_ui(gpx_data, training_id_str)
-            st.markdown("---")
             st.markdown("### Höhenprofil")
             # Spinner für das Höhenprofil
             with st.spinner("Erstelle Höhenprofil..."):
@@ -701,12 +692,12 @@ def display_training_details_ui(training_data, on_delete_callback, on_edit_callb
 
         st.markdown("---")
 
-        col_edit, col_delete, col_spacer = st.columns([0.15, 0.15, 0.7])
+        col_edit, col_delete, col_spacer = st.columns([0.2, 0.2, 0.6])
         with col_edit:
-            if st.button("Bearbeiten 📝", key=f"edit_btn_{training_id_str}"):
+            if st.button("Training Bearbeiten 📝", key=f"edit_btn_{training_id_str}"):
                 on_edit_callback(training_data.doc_id)
         with col_delete:
-            if st.button("Löschen 🗑️", key=f"delete_btn_{training_id_str}"):
+            if st.button("Training Löschen 🗑️", key=f"delete_btn_{training_id_str}"):
                 on_delete_callback(training_data.doc_id, st.session_state.current_user_id)
                 st.success(f"Training '{training_data['name']}' vom {training_data['date']} wurde gelöscht.")
                 st.rerun()
