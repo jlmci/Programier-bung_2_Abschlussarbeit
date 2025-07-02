@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
@@ -259,7 +260,7 @@ def format_time_for_power_curve(s):
     else:
         return f"{s//3600}h"
 
-def plot_power_curve(power_curve_df): # <-- This function definition
+def plot_power_curve(power_curve_df):
     """Plottet die Power-Kurve mit Plotly."""
     if power_curve_df.empty:
         return None
@@ -297,6 +298,7 @@ def main():
 
     st.subheader("Übersicht der Trainingsdaten")
 
+
     trainings_for_user = get_trainings_for_current_user()
 
     if not trainings_for_user:
@@ -306,77 +308,65 @@ def main():
         return
 
     # Cache die Ergebnisse von calculate_total_metrics mit st.cache_data, da sich diese nur bei neuen Trainings ändern.
-    # WICHTIG: Wenn sich die Trainingsdaten in der DB ändern, musst du den Cache leeren (z.B. durch eine Schaltfläche oder Neustart der App)
     @st.cache_data(show_spinner="Berechne Metriken...")
     def get_cached_total_metrics(trainings_list_for_hash):
-        # Um st.cache_data zu nutzen, benötigen wir einen hashbaren Input.
-        # Wir können z.B. die doc_ids der Trainings als Tupel übergeben.
-        # Oder einfach die Rohdaten der Trainings, falls sie nicht zu groß sind.
-        # Hier nutzen wir eine Liste der Trainings-Dokumente.
-        # Wenn sich der Inhalt eines Trainingsdokuments ändert, muss der Cache invalidiert werden.
         return calculate_total_metrics(trainings_list_for_hash)
 
-    # Erstelle einen hashbaren "Fingerabdruck" der Trainings, um den Cache zu steuern
-    # Hier verwenden wir die Liste der doc_ids, da sich der Inhalt der Trainings ändert,
-    # aber die IDs bleiben gleich, es sei denn, ein Training wird hinzugefügt/gelöscht.
-    # Für eine robustere Caching-Strategie müsste man ggf. einen Hash über alle relevanten Trainingsdaten bilden.
     trainings_ids_for_cache = tuple(sorted([t.doc_id for t in trainings_for_user]))
+
+    num_trainings = len(trainings_for_user)
+    st.write(f"In **{num_trainings} Training{'s' if num_trainings != 1 else ''}** hast du folgende Trainingsdaten erreicht:")
 
     total_distance, total_duration, max_hr_measured, all_power_data, total_elevation_gain_pos, total_elevation_gain_neg = get_cached_total_metrics(trainings_for_user)
 
-    col1, col2, col3 = st.columns(3)
+    # --- TOP ROW: Gesamtdistanz, Gesamtzeit, Höhenmeter ---
+    col1, col2, col3_metric, col3_button = st.columns([1, 1, 0.7, 0.3])
 
     with col1:
         st.metric(label="Gesamtdistanz", value=f"{total_distance:.2f} km")
     with col2:
         st.metric(label="Gesamtzeit", value=format_time_duration(total_duration))
-    with col3:
-        person_doc_id = int(st.session_state["person_doc_id"])
-        person_data = dp.get(doc_id=person_doc_id)
-        st.session_state.max_hr_reported_cached = person_data.get('maximalpuls')
-        
-        st.metric(label="Max. Herzfrequenz (Angabe)", value=f"{st.session_state.max_hr_reported_cached} bpm")
-    
-    # Zusätzliche Metrik für die höchste gemessene Herzfrequenz
-    st.markdown("---")
-    st.metric(label="Max. Herzfrequenz (Gemessen aus Dateien)", value=f"{max_hr_measured} bpm" if max_hr_measured > 0 else "N/A")
-
-    st.markdown("---")
-    ### Gesamthöhenmeter
-
-    # Funktion zum Umschalten der Höhenmeter-Anzeigeart
-    def toggle_elevation_type():
-        st.session_state.show_elevation_type = 'neg' if st.session_state.show_elevation_type == 'pos' else 'pos'
-
-    # Spaltenlayout für Metrik und Button
-    metric_col, button_col = st.columns([0.7, 0.3])
-
-    with metric_col:
+    with col3_metric:
         if st.session_state.show_elevation_type == 'pos':
             st.metric(label="Höhenmeter aufwärts", value=f"{total_elevation_gain_pos} m")
         else:
             st.metric(label="Höhenmeter abwärts", value=f"{total_elevation_gain_neg} m")
-    
-    with button_col:
-        st.write("") # Platzhalter für vertikale Ausrichtung
-        st.write("") # Platzhalter für vertikale Ausrichtung
+    with col3_button:
+        st.write("") # Adjust vertical alignment
+        st.write("") # Adjust vertical alignment
+        # Funktion zum Umschalten der Höhenmeter-Anzeigeart
+        def toggle_elevation_type():
+            st.session_state.show_elevation_type = 'neg' if st.session_state.show_elevation_type == 'pos' else 'pos'
         if st.session_state.show_elevation_type == 'pos':
             st.button("⬇️ Abwärts anzeigen", on_click=toggle_elevation_type, key="toggle_elevation_down", help="Klicken, um die gesamten Höhenmeter abwärts anzuzeigen.")
         else:
             st.button("⬆️ Aufwärts anzeigen", on_click=toggle_elevation_type, key="toggle_elevation_up", help="Klicken, um die gesamten Höhenmeter aufwärts anzuzeigen.")
 
     st.markdown("---")
-    ### Akkumulierte Power Curve (aus allen FIT-Dateien)
 
-    # Auch hier den Cache nutzen, da die Power Curve eine aufwändige Berechnung sein kann
+    # --- SECOND ROW: Maximale Herzfrequenzen ---
+    hr_col1, hr_col2 = st.columns(2)
+
+    with hr_col1:
+        person_doc_id = int(st.session_state["person_doc_id"])
+        person_data = dp.get(doc_id=person_doc_id)
+        st.session_state.max_hr_reported_cached = person_data.get('maximalpuls')
+        st.metric(label="Max. Herzfrequenz (Angabe)", value=f"{st.session_state.max_hr_reported_cached} bpm")
+    
+    with hr_col2:
+        st.metric(label="Max. Herzfrequenz (Gemessen aus Dateien)", value=f"{max_hr_measured} bpm" if max_hr_measured > 0 else "N/A")
+
+    st.markdown("---")
+    
+    # --- Akkumulierte Power Curve (bleibt gleich) ---
+    st.subheader("Akkumulierte Power Curve (aus allen FIT-Dateien)")
     @st.cache_data(show_spinner="Erstelle Power Curve...")
     def get_cached_power_curve(all_power_data_df_for_hash):
         return create_accumulated_power_curve(all_power_data_df_for_hash)
 
-    accumulated_pc_df = get_cached_power_curve(all_power_data) # all_power_data ist bereits das Ergebnis aus dem ersten Cache
+    accumulated_pc_df = get_cached_power_curve(all_power_data)
 
     if not accumulated_pc_df.empty:
-        # plot_power_curve ist nicht rechenintensiv, daher muss es nicht gecached werden
         fig_power_curve = plot_power_curve(accumulated_pc_df)
         st.plotly_chart(fig_power_curve, use_container_width=True)
     else:
